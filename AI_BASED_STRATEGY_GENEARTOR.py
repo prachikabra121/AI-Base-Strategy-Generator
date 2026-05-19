@@ -1,12 +1,13 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# NEXT-GEN AI AGENT VERSION
+# FULL INSTITUTIONAL VERSION
 # =========================================================
 #
 # FEATURES:
 #
 # ✅ AI Strategy Generator
 # ✅ AI Strategy Recommendation Engine
+# ✅ Multi-Strategy Comparison
 # ✅ AI Strategy Explanation
 # ✅ RSI Strategy
 # ✅ SMA Strategy
@@ -76,9 +77,9 @@ Build AI-powered trading systems using:
 
 ✅ Generative AI  
 ✅ Vibe Coding  
-✅ Quantitative Trading  
 ✅ AI Agents  
-✅ Natural Language Prompts  
+✅ Quantitative Finance  
+✅ Professional Backtesting  
 """)
 
 # =========================================================
@@ -241,7 +242,7 @@ Format:
     "risk_level":""
 }}
 
-Supported strategy types:
+Supported:
 - RSI
 - SMA
 """
@@ -495,7 +496,7 @@ def run_rsi_strategy(
 
     df['Signal'] = 0
 
-    # BUY SIGNAL
+    # BUY
     df.loc[
         (
             (df['RSI'] < buy_value) &
@@ -504,7 +505,7 @@ def run_rsi_strategy(
         'Signal'
     ] = 1
 
-    # SELL SIGNAL
+    # SELL
     df.loc[
         (
             (df['RSI'] > sell_value) &
@@ -541,7 +542,7 @@ def run_sma_strategy(df):
 
     df['Signal'] = 0
 
-    # BUY CROSSOVER
+    # BUY
     df.loc[
         (
             (df['SMA20'] > df['SMA50']) &
@@ -553,7 +554,7 @@ def run_sma_strategy(df):
         'Signal'
     ] = 1
 
-    # SELL CROSSOVER
+    # SELL
     df.loc[
         (
             (df['SMA20'] < df['SMA50']) &
@@ -703,7 +704,99 @@ def calculate_metrics(
     )
 
 # =========================================================
-# PRICE CHART
+# MULTI STRATEGY COMPARISON ENGINE
+# =========================================================
+
+def compare_strategies(df, period):
+
+    comparison_results = []
+
+    # =====================================================
+    # RSI STRATEGY
+    # =====================================================
+
+    rsi_df = df.copy()
+
+    rsi_df = run_rsi_strategy(
+        rsi_df,
+        30,
+        70
+    )
+
+    (
+        rsi_df,
+        rsi_market_curve,
+        rsi_strategy_curve
+    ) = backtest(rsi_df)
+
+    (
+        rsi_return,
+        rsi_market_return,
+        rsi_cagr,
+        rsi_drawdown,
+        rsi_volatility,
+        rsi_sharpe
+    ) = calculate_metrics(
+        rsi_strategy_curve,
+        rsi_market_curve,
+        rsi_df,
+        period
+    )
+
+    comparison_results.append({
+        "Strategy":"RSI",
+        "Return %":round(rsi_return, 2),
+        "CAGR %":round(rsi_cagr, 2),
+        "Sharpe":round(rsi_sharpe, 2),
+        "Drawdown %":round(rsi_drawdown, 2)
+    })
+
+    # =====================================================
+    # SMA STRATEGY
+    # =====================================================
+
+    sma_df = df.copy()
+
+    sma_df = run_sma_strategy(
+        sma_df
+    )
+
+    (
+        sma_df,
+        sma_market_curve,
+        sma_strategy_curve
+    ) = backtest(sma_df)
+
+    (
+        sma_return,
+        sma_market_return,
+        sma_cagr,
+        sma_drawdown,
+        sma_volatility,
+        sma_sharpe
+    ) = calculate_metrics(
+        sma_strategy_curve,
+        sma_market_curve,
+        sma_df,
+        period
+    )
+
+    comparison_results.append({
+        "Strategy":"SMA",
+        "Return %":round(sma_return, 2),
+        "CAGR %":round(sma_cagr, 2),
+        "Sharpe":round(sma_sharpe, 2),
+        "Drawdown %":round(sma_drawdown, 2)
+    })
+
+    comparison_df = pd.DataFrame(
+        comparison_results
+    )
+
+    return comparison_df
+
+# =========================================================
+# CHART
 # =========================================================
 
 def plot_chart(df, ticker):
@@ -799,7 +892,7 @@ def plot_equity_curve(
 if st.button("🚀 Generate AI Strategy"):
 
     # =====================================================
-    # AI STRATEGY GENERATION
+    # AI GENERATED STRATEGY
     # =====================================================
 
     if strategy_mode == "AI Generate Strategy":
@@ -863,7 +956,6 @@ if st.button("🚀 Generate AI Strategy"):
         period
     )
 
-    # CURRENT PRICE
     latest_price = data[
         'Close'
     ].iloc[-1]
@@ -874,7 +966,7 @@ if st.button("🚀 Generate AI Strategy"):
     )
 
     # =====================================================
-    # STRATEGY RECOMMENDATION ENGINE
+    # STRATEGY RECOMMENDATION
     # =====================================================
 
     (
@@ -989,6 +1081,41 @@ if st.button("🚀 Generate AI Strategy"):
         "Sharpe Ratio",
         f"{sharpe:.2f}"
     )
+
+    # =====================================================
+    # MULTI STRATEGY COMPARISON
+    # =====================================================
+
+    comparison_df = compare_strategies(
+        data.copy(),
+        period
+    )
+
+    st.subheader(
+        "⚔ Multi-Strategy Comparison"
+    )
+
+    st.dataframe(
+        comparison_df,
+        use_container_width=True
+    )
+
+    # =====================================================
+    # BEST STRATEGY DETECTION
+    # =====================================================
+
+    best_strategy = comparison_df.sort_values(
+        by="Sharpe",
+        ascending=False
+    ).iloc[0]
+
+    st.success(f"""
+🏆 Best Strategy Detected:
+{best_strategy['Strategy']}
+
+Sharpe Ratio:
+{best_strategy['Sharpe']}
+""")
 
     # =====================================================
     # AI RISK ANALYSIS
@@ -1134,11 +1261,14 @@ if st.button("🚀 Generate AI Strategy"):
 
 ✅ Recommended Strategy: {recommended_strategy}
 
+✅ Best Performing Strategy: {best_strategy['Strategy']}
+
 ✅ Risk Appetite: {risk_appetite}
 
 ✅ Historical Period Tested: {period}
 
 This platform demonstrates how Generative AI,
-AI Agents, and Vibe Coding can build
-next-generation quantitative trading systems.
+AI Agents, Vibe Coding, and Quantitative Finance
+can combine to build next-generation
+trading systems.
 """)
