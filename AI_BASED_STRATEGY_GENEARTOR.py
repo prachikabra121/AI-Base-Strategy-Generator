@@ -1,9 +1,18 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FULL FINAL STABLE VERSION
+# FULL ADVANCED VERSION
+# WITH:
+# ✅ AI STRATEGY RECOMMENDATION ENGINE
+# ✅ RSI STRATEGY
+# ✅ SMA STRATEGY
+# ✅ PROFESSIONAL BACKTESTING
+# ✅ AI EXPLANATIONS
+# ✅ RISK ANALYSIS
 # =========================================================
-#
-# INSTALL:
+
+# =========================================================
+# INSTALL
+# =========================================================
 #
 # pip install streamlit yfinance pandas ta plotly google-generativeai numpy
 #
@@ -24,8 +33,8 @@ import plotly.graph_objects as go
 from ta.momentum import RSIIndicator
 from ta.trend import SMAIndicator
 import google.generativeai as genai
-import json
 import numpy as np
+import json
 
 # =========================================================
 # PAGE CONFIG
@@ -58,32 +67,28 @@ model = genai.GenerativeModel(
 st.title("🚀 AI Quant Trading Platform")
 
 st.write("""
-Build intelligent AI-powered trading strategies
-using plain English prompts.
+AI-powered trading platform with:
 
-Supports:
-✅ Stocks
-✅ Crypto
-✅ ETFs
-✅ Indexes
-✅ AI Explanations
-✅ Risk Analytics
-✅ Professional Backtesting
+✅ Strategy Recommendation Engine  
+✅ AI Strategy Parsing  
+✅ Professional Backtesting  
+✅ Risk Analytics  
+✅ Stocks / Crypto / ETFs / Indexes  
 """)
 
 # =========================================================
 # SIDEBAR
 # =========================================================
 
-st.sidebar.title("⚙ Platform Settings")
+st.sidebar.title("⚙ Trading Settings")
 
 ticker = st.sidebar.text_input(
-    "Enter Any Stock / Crypto / ETF / Index",
+    "Enter Ticker",
     value="AAPL"
 ).strip().upper()
 
 period = st.sidebar.selectbox(
-    "Select Time Period",
+    "Historical Period",
     [
         "6mo",
         "1y",
@@ -92,11 +97,6 @@ period = st.sidebar.selectbox(
         "10y"
     ],
     index=4
-)
-
-initial_capital = st.sidebar.number_input(
-    "Initial Capital",
-    value=100000
 )
 
 risk_appetite = st.sidebar.selectbox(
@@ -122,15 +122,13 @@ TCS.NS
 
 Crypto:
 BTC-USD
-ETH-USD
 
 Indexes:
 ^NSEI
-^GSPC
 """)
 
 # =========================================================
-# MARKET TYPE DETECTION
+# MARKET TYPE
 # =========================================================
 
 if "-USD" in ticker:
@@ -179,24 +177,22 @@ Buy when trend becomes bullish
 def parse_strategy(strategy):
 
     prompt = f"""
-You are an AI quant trading assistant.
+You are an AI trading assistant.
 
-Analyze this trading strategy:
+Analyze this strategy:
 
 {strategy}
 
-Supported strategies:
+Supported:
 1. RSI
 2. SMA
 
-Return ONLY valid JSON.
+Return ONLY JSON.
 
 RSI FORMAT:
 
 {{
     "strategy_type":"RSI",
-    "buy_condition":"RSI < 30",
-    "sell_condition":"RSI > 70",
     "buy_value":30,
     "sell_value":70
 }}
@@ -235,15 +231,14 @@ SMA FORMAT:
         }
 
 # =========================================================
-# AI STRATEGY EXPLANATION
+# AI EXPLANATION
 # =========================================================
 
 def explain_strategy(strategy):
 
     prompt = f"""
-Explain this trading strategy in simple terms.
+Explain this trading strategy:
 
-Strategy:
 {strategy}
 
 Include:
@@ -276,7 +271,6 @@ def load_data(symbol, period):
             threads=False
         )
 
-        # EMPTY CHECK
         if df is None or df.empty:
 
             st.error(
@@ -285,7 +279,6 @@ def load_data(symbol, period):
 
             st.stop()
 
-        # MULTI INDEX FIX
         if isinstance(
             df.columns,
             pd.MultiIndex
@@ -295,14 +288,12 @@ def load_data(symbol, period):
                 df.columns.get_level_values(0)
             )
 
-        # REMOVE NaN
         df = df.dropna()
 
-        # MINIMUM DATA CHECK
         if len(df) < 50:
 
             st.error(
-                "❌ Not enough historical data."
+                "❌ Not enough data."
             )
 
             st.stop()
@@ -312,10 +303,78 @@ def load_data(symbol, period):
     except Exception as e:
 
         st.error(
-            f"Data Loading Error: {e}"
+            f"Data Error: {e}"
         )
 
         st.stop()
+
+# =========================================================
+# STRATEGY RECOMMENDATION ENGINE
+# =========================================================
+
+def recommend_strategy(df):
+
+    sma50 = (
+        df['Close']
+        .rolling(50)
+        .mean()
+    )
+
+    sma200 = (
+        df['Close']
+        .rolling(200)
+        .mean()
+    )
+
+    volatility = (
+        df['Close']
+        .pct_change()
+        .std()
+        * np.sqrt(252)
+    )
+
+    latest_sma50 = sma50.iloc[-1]
+
+    latest_sma200 = sma200.iloc[-1]
+
+    # TRENDING MARKET
+    if latest_sma50 > latest_sma200:
+
+        recommendation = "SMA"
+
+        explanation = """
+📈 Market Regime:
+Trending Bullish Market
+
+✅ Recommended Strategy:
+SMA Trend Following
+
+Reason:
+Asset is trading in a strong
+long-term bullish trend.
+"""
+
+    else:
+
+        recommendation = "RSI"
+
+        explanation = """
+📉 Market Regime:
+Range-Bound / Sideways Market
+
+✅ Recommended Strategy:
+RSI Mean Reversion
+
+Reason:
+Market is less directional and
+better suited for reversal trading.
+"""
+
+    return (
+        recommendation,
+        explanation,
+        volatility
+    )
 
 # =========================================================
 # RSI STRATEGY
@@ -415,12 +474,12 @@ def backtest(df):
 
     transaction_cost = 0.001
 
-    # DAILY RETURNS
+    # RETURNS
     df['Returns'] = (
         df['Close'].pct_change()
     )
 
-    # POSITION TRACKING
+    # POSITION
     df['Position'] = df['Signal']
 
     df['Position'] = (
@@ -432,21 +491,22 @@ def backtest(df):
 
     # STRATEGY RETURNS
     df['Strategy_Returns'] = (
-        df['Returns'] *
+        df['Returns']
+        *
         df['Position'].shift(1)
     )
 
-    # APPLY TRANSACTION COST
+    # COST
     df['Strategy_Returns'] = (
         df['Strategy_Returns']
         -
         (
-            transaction_cost *
+            transaction_cost
+            *
             abs(df['Position'].diff())
         )
     )
 
-    # REMOVE NaN
     df['Strategy_Returns'] = (
         df['Strategy_Returns']
         .fillna(0)
@@ -461,15 +521,6 @@ def backtest(df):
         1 + df['Strategy_Returns']
     ).cumprod()
 
-    # CLEAN NaN
-    market_curve = (
-        market_curve.fillna(1)
-    )
-
-    strategy_curve = (
-        strategy_curve.fillna(1)
-    )
-
     return (
         df,
         market_curve,
@@ -477,7 +528,7 @@ def backtest(df):
     )
 
 # =========================================================
-# PERFORMANCE METRICS
+# METRICS
 # =========================================================
 
 def calculate_metrics(
@@ -537,7 +588,6 @@ def calculate_metrics(
         df['Strategy_Returns'].std()
     ) * np.sqrt(252)
 
-    # HANDLE NaN SHARPE
     if np.isnan(sharpe):
 
         sharpe = 0
@@ -552,14 +602,13 @@ def calculate_metrics(
     )
 
 # =========================================================
-# PRICE CHART
+# CHART
 # =========================================================
 
 def plot_chart(df, ticker):
 
     fig = go.Figure()
 
-    # PRICE
     fig.add_trace(
         go.Scatter(
             x=df.index,
@@ -569,7 +618,6 @@ def plot_chart(df, ticker):
         )
     )
 
-    # BUY SIGNALS
     buy_signals = df[
         df['Signal'] == 1
     ]
@@ -583,7 +631,6 @@ def plot_chart(df, ticker):
         )
     )
 
-    # SELL SIGNALS
     sell_signals = df[
         df['Signal'] == -1
     ]
@@ -689,6 +736,27 @@ if st.button("🚀 Generate AI Strategy"):
         f"${latest_price:,.2f}"
     )
 
+    # =====================================================
+    # STRATEGY RECOMMENDATION ENGINE
+    # =====================================================
+
+    (
+        recommended_strategy,
+        recommendation_text,
+        market_volatility
+    ) = recommend_strategy(data)
+
+    st.subheader(
+        "🧠 AI Strategy Recommendation Engine"
+    )
+
+    st.info(recommendation_text)
+
+    st.metric(
+        "Market Volatility",
+        f"{market_volatility:.2%}"
+    )
+
     # APPLY STRATEGY
     strategy_type = strategy_json[
         'strategy_type'
@@ -767,7 +835,7 @@ if st.button("🚀 Generate AI Strategy"):
         f"{sharpe:.2f}"
     )
 
-    # AI RISK ANALYSIS
+    # RISK ANALYSIS
     st.subheader(
         "🧠 AI Risk Analysis"
     )
@@ -802,7 +870,7 @@ if st.button("🚀 Generate AI Strategy"):
         f"AI Confidence Score: {confidence}%"
     )
 
-    # TREND ANALYSIS
+    # TREND
     if latest_price > data[
         'Close'
     ].mean():
@@ -887,6 +955,8 @@ if st.button("🚀 Generate AI Strategy"):
 ✅ Market Type: {market_type}
 
 ✅ Strategy Type: {strategy_type}
+
+✅ Recommended Strategy: {recommended_strategy}
 
 ✅ Risk Appetite: {risk_appetite}
 
