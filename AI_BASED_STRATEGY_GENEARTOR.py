@@ -1,18 +1,17 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FULL ADVANCED VERSION
+# FULL PROFESSIONAL VERSION
 # =========================================================
 #
 # INSTALL:
 #
-# pip install streamlit yfinance pandas ta plotly google-generativeai
+# pip install streamlit yfinance pandas ta plotly google-generativeai numpy
 #
 # RUN:
 #
 # python -m streamlit run main.py
 #
 # =========================================================
-
 
 # =========================================================
 # IMPORTS
@@ -67,7 +66,7 @@ Supports:
 ✅ Indexes
 ✅ AI Explanations
 ✅ Risk Analytics
-✅ Backtesting
+✅ Professional Backtesting
 """)
 
 # =========================================================
@@ -117,12 +116,15 @@ NVDA
 
 Indian Stocks:
 RELIANCE.NS
+TCS.NS
 
 Crypto:
 BTC-USD
+ETH-USD
 
 Indexes:
 ^NSEI
+^GSPC
 """)
 
 # =========================================================
@@ -168,12 +170,12 @@ Buy when trend becomes bullish
 """
 )
 
-
 # =========================================================
 # AI STRATEGY PARSER
 # =========================================================
 
 def parse_strategy(strategy):
+
     prompt = f"""
 You are an AI quant trading assistant.
 
@@ -181,7 +183,7 @@ Analyze this strategy:
 
 {strategy}
 
-Supported:
+Supported strategy types:
 1. RSI
 2. SMA
 
@@ -225,26 +227,27 @@ SMA FORMAT:
     except:
 
         return {
-            "strategy_type": "RSI",
-            "buy_value": 30,
-            "sell_value": 70
+            "strategy_type":"RSI",
+            "buy_value":30,
+            "sell_value":70
         }
-
 
 # =========================================================
 # AI STRATEGY EXPLANATION
 # =========================================================
 
 def explain_strategy(strategy):
-    prompt = f"""
-Explain this trading strategy in simple terms:
 
+    prompt = f"""
+Explain this trading strategy in simple terms.
+
+Strategy:
 {strategy}
 
 Include:
 - logic
-- market conditions
 - risk
+- market conditions
 - best usage
 """
 
@@ -252,12 +255,12 @@ Include:
 
     return response.text
 
-
 # =========================================================
 # LOAD DATA
 # =========================================================
 
 def load_data(symbol, period):
+
     try:
 
         df = yf.download(
@@ -267,16 +270,18 @@ def load_data(symbol, period):
         )
 
         if df.empty:
+
             st.error(
-                "Invalid ticker or no data."
+                "❌ Invalid ticker or no data found."
             )
 
             st.stop()
 
         if isinstance(
-                df.columns,
-                pd.MultiIndex
+            df.columns,
+            pd.MultiIndex
         ):
+
             df.columns = (
                 df.columns.droplevel(1)
             )
@@ -285,44 +290,54 @@ def load_data(symbol, period):
 
     except Exception as e:
 
-        st.error(e)
+        st.error(f"Error: {e}")
 
         st.stop()
-
 
 # =========================================================
 # RSI STRATEGY
 # =========================================================
 
 def run_rsi_strategy(
-        df,
-        buy_value,
-        sell_value
+    df,
+    buy_value,
+    sell_value
 ):
-    rsi = RSIIndicator(df['Close'])
+
+    rsi = RSIIndicator(
+        df['Close']
+    )
 
     df['RSI'] = rsi.rsi()
 
     df['Signal'] = 0
 
+    # BUY CROSS
     df.loc[
-        df['RSI'] < buy_value,
+        (
+            (df['RSI'] < buy_value) &
+            (df['RSI'].shift(1) >= buy_value)
+        ),
         'Signal'
     ] = 1
 
+    # SELL CROSS
     df.loc[
-        df['RSI'] > sell_value,
+        (
+            (df['RSI'] > sell_value) &
+            (df['RSI'].shift(1) <= sell_value)
+        ),
         'Signal'
     ] = -1
 
     return df
-
 
 # =========================================================
 # SMA STRATEGY
 # =========================================================
 
 def run_sma_strategy(df):
+
     sma20 = SMAIndicator(
         df['Close'],
         window=20
@@ -343,39 +358,74 @@ def run_sma_strategy(df):
 
     df['Signal'] = 0
 
+    # BUY CROSSOVER
     df.loc[
-        df['SMA20'] > df['SMA50'],
+        (
+            (df['SMA20'] > df['SMA50']) &
+            (df['SMA20'].shift(1)
+             <= df['SMA50'].shift(1))
+        ),
         'Signal'
     ] = 1
 
+    # SELL CROSSOVER
     df.loc[
-        df['SMA20'] < df['SMA50'],
+        (
+            (df['SMA20'] < df['SMA50']) &
+            (df['SMA20'].shift(1)
+             >= df['SMA50'].shift(1))
+        ),
         'Signal'
     ] = -1
 
     return df
 
-
 # =========================================================
-# BACKTEST
+# BACKTEST ENGINE
 # =========================================================
 
 def backtest(df):
+
+    transaction_cost = 0.001
+
+    # DAILY RETURNS
     df['Returns'] = (
         df['Close'].pct_change()
     )
 
-    df['Strategy_Returns'] = (
-            df['Returns'] *
-            df['Signal'].shift(1)
+    # POSITION TRACKING
+    df['Position'] = (
+        df['Signal']
+        .replace(to_replace=0, method='ffill')
     )
 
+    df['Position'] = (
+        df['Position']
+        .fillna(0)
+    )
+
+    # STRATEGY RETURNS
+    df['Strategy_Returns'] = (
+        df['Returns'] *
+        df['Position'].shift(1)
+    )
+
+    # TRANSACTION COST
+    df['Strategy_Returns'] = (
+        df['Strategy_Returns']
+        - (
+            transaction_cost *
+            abs(df['Position'].diff())
+        )
+    )
+
+    # EQUITY CURVES
     market_curve = (
-            1 + df['Returns']
+        1 + df['Returns']
     ).cumprod()
 
     strategy_curve = (
-            1 + df['Strategy_Returns']
+        1 + df['Strategy_Returns']
     ).cumprod()
 
     return (
@@ -384,65 +434,66 @@ def backtest(df):
         strategy_curve
     )
 
-
 # =========================================================
 # PERFORMANCE METRICS
 # =========================================================
 
 def calculate_metrics(
-        strategy_curve,
-        market_curve,
-        df,
-        period
+    strategy_curve,
+    market_curve,
+    df,
+    period
 ):
+
     strategy_return = (
-            (strategy_curve.iloc[-1] - 1)
-            * 100
+        (strategy_curve.iloc[-1] - 1)
+        * 100
     )
 
     market_return = (
-            (market_curve.iloc[-1] - 1)
-            * 100
+        (market_curve.iloc[-1] - 1)
+        * 100
     )
 
     years_map = {
-        "6mo": 0.5,
-        "1y": 1,
-        "2y": 2,
-        "5y": 5,
-        "10y": 10
+        "6mo":0.5,
+        "1y":1,
+        "2y":2,
+        "5y":5,
+        "10y":10
     }
 
     years = years_map[period]
 
     cagr = (
-                   (
-                       strategy_curve.iloc[-1]
-                   ) ** (1 / years) - 1
-           ) * 100
+        (
+            strategy_curve.iloc[-1]
+        ) ** (1 / years) - 1
+    ) * 100
 
     rolling_max = (
         strategy_curve.cummax()
     )
 
     drawdown = (
-                       strategy_curve -
-                       rolling_max
-               ) / rolling_max
+        strategy_curve -
+        rolling_max
+    ) / rolling_max
 
     max_drawdown = (
-            drawdown.min() * 100
+        drawdown.min() * 100
     )
 
     volatility = (
-                         df['Returns'].std() *
-                         np.sqrt(252)
-                 ) * 100
+        df['Returns'].std()
+        * np.sqrt(252)
+    ) * 100
 
     sharpe = (
-                     df['Strategy_Returns'].mean() /
-                     df['Strategy_Returns'].std()
-             ) * np.sqrt(252)
+        df['Strategy_Returns'].mean()
+        /
+        df['Strategy_Returns'].std()
+    ) * np.sqrt(252)
 
     return (
         strategy_return,
@@ -453,14 +504,15 @@ def calculate_metrics(
         sharpe
     )
 
-
 # =========================================================
 # PRICE CHART
 # =========================================================
 
 def plot_chart(df, ticker):
+
     fig = go.Figure()
 
+    # PRICE
     fig.add_trace(
         go.Scatter(
             x=df.index,
@@ -470,9 +522,10 @@ def plot_chart(df, ticker):
         )
     )
 
+    # BUY SIGNALS
     buy_signals = df[
         df['Signal'] == 1
-        ]
+    ]
 
     fig.add_trace(
         go.Scatter(
@@ -483,9 +536,10 @@ def plot_chart(df, ticker):
         )
     )
 
+    # SELL SIGNALS
     sell_signals = df[
         df['Signal'] == -1
-        ]
+    ]
 
     fig.add_trace(
         go.Scatter(
@@ -506,15 +560,15 @@ def plot_chart(df, ticker):
         use_container_width=True
     )
 
-
 # =========================================================
 # EQUITY CURVE
 # =========================================================
 
 def plot_equity_curve(
-        market_curve,
-        strategy_curve
+    market_curve,
+    strategy_curve
 ):
+
     fig = go.Figure()
 
     fig.add_trace(
@@ -543,7 +597,6 @@ def plot_equity_curve(
         use_container_width=True
     )
 
-
 # =========================================================
 # MAIN EXECUTION
 # =========================================================
@@ -551,6 +604,7 @@ def plot_equity_curve(
 if st.button("🚀 Generate AI Strategy"):
 
     if strategy_text.strip() == "":
+
         st.warning(
             "Please enter strategy."
         )
@@ -562,7 +616,7 @@ if st.button("🚀 Generate AI Strategy"):
     # -------------------------------------
 
     with st.spinner(
-            "AI is generating strategy..."
+        "🤖 AI is analyzing strategy..."
     ):
 
         strategy_json = parse_strategy(
@@ -582,6 +636,19 @@ if st.button("🚀 Generate AI Strategy"):
     data = load_data(
         ticker,
         period
+    )
+
+    # -------------------------------------
+    # CURRENT PRICE
+    # -------------------------------------
+
+    latest_price = data[
+        'Close'
+    ].iloc[-1]
+
+    st.metric(
+        "Current Price",
+        f"${latest_price:,.2f}"
     )
 
     # -------------------------------------
@@ -633,23 +700,12 @@ if st.button("🚀 Generate AI Strategy"):
     )
 
     # -------------------------------------
-    # CURRENT PRICE
+    # PERFORMANCE METRICS
     # -------------------------------------
 
-    latest_price = data[
-        'Close'
-    ].iloc[-1]
-
-    st.metric(
-        "Current Price",
-        f"${latest_price:,.2f}"
+    st.subheader(
+        "📊 Performance Metrics"
     )
-
-    # -------------------------------------
-    # PERFORMANCE
-    # -------------------------------------
-
-    st.subheader("📊 Performance Metrics")
 
     col1, col2, col3 = st.columns(3)
 
@@ -689,7 +745,9 @@ if st.button("🚀 Generate AI Strategy"):
     # AI RISK ANALYSIS
     # -------------------------------------
 
-    st.subheader("🧠 AI Risk Analysis")
+    st.subheader(
+        "🧠 AI Risk Analysis"
+    )
 
     if sharpe > 1:
 
@@ -722,7 +780,7 @@ if st.button("🚀 Generate AI Strategy"):
     )
 
     # -------------------------------------
-    # TREND
+    # TREND ANALYSIS
     # -------------------------------------
 
     if latest_price > data[
@@ -740,7 +798,7 @@ if st.button("🚀 Generate AI Strategy"):
         )
 
     # -------------------------------------
-    # SIGNAL
+    # LATEST SIGNAL
     # -------------------------------------
 
     latest_signal = data[
@@ -759,8 +817,14 @@ if st.button("🚀 Generate AI Strategy"):
             "🔴 SELL SIGNAL GENERATED"
         )
 
+    else:
+
+        st.warning(
+            "⚪ HOLD / NO ACTIVE SIGNAL"
+        )
+
     # -------------------------------------
-    # PRICE CHART
+    # CHARTS
     # -------------------------------------
 
     st.subheader(
@@ -768,10 +832,6 @@ if st.button("🚀 Generate AI Strategy"):
     )
 
     plot_chart(data, ticker)
-
-    # -------------------------------------
-    # EQUITY CURVE
-    # -------------------------------------
 
     st.subheader(
         "📊 Equity Curve"
@@ -797,7 +857,7 @@ if st.button("🚀 Generate AI Strategy"):
     st.write(explanation)
 
     # -------------------------------------
-    # DATA PREVIEW
+    # MARKET DATA
     # -------------------------------------
 
     st.subheader(
@@ -827,7 +887,7 @@ if st.button("🚀 Generate AI Strategy"):
 
 ✅ Historical Period Tested: {period}
 
-This demonstrates how AI can assist traders
-in generating intelligent quantitative trading
-systems using plain English prompts.
+This platform demonstrates how AI can help
+traders build intelligent quantitative trading
+systems using natural language prompts.
 """)
