@@ -1,18 +1,9 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FULL ADVANCED VERSION
-# WITH:
-# ✅ AI STRATEGY RECOMMENDATION ENGINE
-# ✅ RSI STRATEGY
-# ✅ SMA STRATEGY
-# ✅ PROFESSIONAL BACKTESTING
-# ✅ AI EXPLANATIONS
-# ✅ RISK ANALYSIS
+# FINAL PRODUCTION VERSION
 # =========================================================
-
-# =========================================================
-# INSTALL
-# =========================================================
+#
+# INSTALL:
 #
 # pip install streamlit yfinance pandas ta plotly google-generativeai numpy
 #
@@ -69,11 +60,11 @@ st.title("🚀 AI Quant Trading Platform")
 st.write("""
 AI-powered trading platform with:
 
-✅ Strategy Recommendation Engine  
-✅ AI Strategy Parsing  
-✅ Professional Backtesting  
-✅ Risk Analytics  
-✅ Stocks / Crypto / ETFs / Indexes  
+✅ Strategy Recommendation Engine
+✅ AI Strategy Parsing
+✅ Professional Backtesting
+✅ Risk Analytics
+✅ Stocks / Crypto / ETFs / Indexes
 """)
 
 # =========================================================
@@ -122,9 +113,11 @@ TCS.NS
 
 Crypto:
 BTC-USD
+ETH-USD
 
 Indexes:
 ^NSEI
+^GSPC
 """)
 
 # =========================================================
@@ -187,7 +180,7 @@ Supported:
 1. RSI
 2. SMA
 
-Return ONLY JSON.
+Return ONLY valid JSON.
 
 RSI FORMAT:
 
@@ -204,21 +197,21 @@ SMA FORMAT:
 }}
 """
 
-    response = model.generate_content(prompt)
-
-    content = response.text
-
-    content = content.replace(
-        "```json",
-        ""
-    )
-
-    content = content.replace(
-        "```",
-        ""
-    )
-
     try:
+
+        response = model.generate_content(prompt)
+
+        content = response.text
+
+        content = content.replace(
+            "```json",
+            ""
+        )
+
+        content = content.replace(
+            "```",
+            ""
+        )
 
         return json.loads(content)
 
@@ -231,7 +224,7 @@ SMA FORMAT:
         }
 
 # =========================================================
-# AI EXPLANATION
+# AI STRATEGY EXPLANATION
 # =========================================================
 
 def explain_strategy(strategy):
@@ -248,9 +241,15 @@ Include:
 - best usage
 """
 
-    response = model.generate_content(prompt)
+    try:
 
-    return response.text
+        response = model.generate_content(prompt)
+
+        return response.text
+
+    except:
+
+        return "AI explanation unavailable."
 
 # =========================================================
 # LOAD DATA
@@ -262,15 +261,17 @@ def load_data(symbol, period):
 
     try:
 
-        df = yf.download(
-            tickers=symbol,
+        # CREATE TICKER OBJECT
+        ticker_data = yf.Ticker(symbol)
+
+        # FETCH HISTORICAL DATA
+        df = ticker_data.history(
             period=period,
             interval="1d",
-            auto_adjust=True,
-            progress=False,
-            threads=False
+            auto_adjust=True
         )
 
+        # EMPTY CHECK
         if df is None or df.empty:
 
             st.error(
@@ -279,21 +280,14 @@ def load_data(symbol, period):
 
             st.stop()
 
-        if isinstance(
-            df.columns,
-            pd.MultiIndex
-        ):
-
-            df.columns = (
-                df.columns.get_level_values(0)
-            )
-
+        # REMOVE NaN
         df = df.dropna()
 
+        # MINIMUM DATA CHECK
         if len(df) < 50:
 
             st.error(
-                "❌ Not enough data."
+                "❌ Not enough historical data."
             )
 
             st.stop()
@@ -303,7 +297,7 @@ def load_data(symbol, period):
     except Exception as e:
 
         st.error(
-            f"Data Error: {e}"
+            f"Data Loading Error: {e}"
         )
 
         st.stop()
@@ -337,7 +331,6 @@ def recommend_strategy(df):
 
     latest_sma200 = sma200.iloc[-1]
 
-    # TRENDING MARKET
     if latest_sma50 > latest_sma200:
 
         recommendation = "SMA"
@@ -474,12 +467,12 @@ def backtest(df):
 
     transaction_cost = 0.001
 
-    # RETURNS
+    # DAILY RETURNS
     df['Returns'] = (
         df['Close'].pct_change()
     )
 
-    # POSITION
+    # POSITION TRACKING
     df['Position'] = df['Signal']
 
     df['Position'] = (
@@ -496,7 +489,7 @@ def backtest(df):
         df['Position'].shift(1)
     )
 
-    # COST
+    # APPLY TRANSACTION COST
     df['Strategy_Returns'] = (
         df['Strategy_Returns']
         -
@@ -609,6 +602,7 @@ def plot_chart(df, ticker):
 
     fig = go.Figure()
 
+    # PRICE
     fig.add_trace(
         go.Scatter(
             x=df.index,
@@ -618,6 +612,7 @@ def plot_chart(df, ticker):
         )
     )
 
+    # BUY SIGNALS
     buy_signals = df[
         df['Signal'] == 1
     ]
@@ -631,6 +626,7 @@ def plot_chart(df, ticker):
         )
     )
 
+    # SELL SIGNALS
     sell_signals = df[
         df['Signal'] == -1
     ]
@@ -736,10 +732,7 @@ if st.button("🚀 Generate AI Strategy"):
         f"${latest_price:,.2f}"
     )
 
-    # =====================================================
-    # STRATEGY RECOMMENDATION ENGINE
-    # =====================================================
-
+    # STRATEGY RECOMMENDATION
     (
         recommended_strategy,
         recommendation_text,
@@ -935,7 +928,7 @@ if st.button("🚀 Generate AI Strategy"):
 
     st.write(explanation)
 
-    # DATA
+    # MARKET DATA
     st.subheader(
         "📋 Market Data"
     )
