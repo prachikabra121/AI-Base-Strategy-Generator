@@ -1,6 +1,6 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FULL STABLE PRODUCTION VERSION
+# FINAL STABLE PRODUCTION VERSION
 # =========================================================
 #
 # FEATURES:
@@ -17,7 +17,8 @@
 # ✅ Risk Analytics
 # ✅ Vibe Coding Experience
 # ✅ Stocks / Crypto / ETFs / Indexes
-# ✅ Yahoo Finance Rate Limit Fix
+# ✅ Stable Yahoo Finance Loader
+# ✅ Rate Limit Handling
 #
 # =========================================================
 #
@@ -374,7 +375,7 @@ Include:
         return "AI explanation unavailable."
 
 # =========================================================
-# LOAD DATA (RATE LIMIT FIX VERSION)
+# LOAD DATA (FINAL STABLE VERSION)
 # =========================================================
 
 @st.cache_data(ttl=3600)
@@ -385,20 +386,29 @@ def load_data(symbol, period):
 
     try:
 
+        # SMALL DELAY
+
+        time.sleep(1)
+
+        # DOWNLOAD DATA
+
         df = yf.download(
             tickers=symbol,
             period=period,
             interval="1d",
             auto_adjust=True,
             progress=False,
-            threads=False
+            threads=False,
+            group_by='column'
         )
 
-        # =================================================
-        # VALIDATION
-        # =================================================
+        # DEBUG
 
-        if df is None or df.empty:
+        st.write("Downloaded Rows:", len(df))
+
+        # VALIDATION
+
+        if df.empty:
 
             st.error(
                 f"❌ No market data found for {symbol}"
@@ -406,26 +416,20 @@ def load_data(symbol, period):
 
             st.stop()
 
-        # =================================================
-        # CLEAN DATA
-        # =================================================
-
-        df = df.dropna()
-
-        # =================================================
-        # FIX MULTI INDEX
-        # =================================================
+        # FIX MULTIINDEX
 
         if isinstance(
             df.columns,
             pd.MultiIndex
         ):
 
-            df.columns = df.columns.get_level_values(0)
+            df.columns = df.columns.droplevel(1)
 
-        # =================================================
+        # CLEAN DATA
+
+        df = df.dropna()
+
         # REQUIRED COLUMNS
-        # =================================================
 
         required_cols = [
             'Open',
@@ -435,15 +439,20 @@ def load_data(symbol, period):
             'Volume'
         ]
 
-        for col in required_cols:
+        missing_cols = [
+            col for col in required_cols
+            if col not in df.columns
+        ]
 
-            if col not in df.columns:
+        if len(missing_cols) > 0:
 
-                st.error(
-                    f"Missing column: {col}"
-                )
+            st.error(
+                f"Missing columns: {missing_cols}"
+            )
 
-                st.stop()
+            st.write(df.head())
+
+            st.stop()
 
         return df
 
@@ -458,7 +467,7 @@ Yahoo Finance temporarily rate-limited requests.
 
 Solutions:
 1. Wait 1 minute
-2. Restart app
+2. Restart Streamlit app
 3. Change ticker
 """)
 
@@ -496,7 +505,7 @@ def recommend_strategy(df):
         explanation = """
 📈 Trending Market Detected
 
-✅ Recommended:
+✅ Recommended Strategy:
 SMA Trend Following
 """
 
@@ -507,7 +516,7 @@ SMA Trend Following
         explanation = """
 📉 Sideways Market Detected
 
-✅ Recommended:
+✅ Recommended Strategy:
 RSI Mean Reversion
 """
 
@@ -840,13 +849,7 @@ def plot_chart(df, ticker):
 
 if st.button("🚀 Generate AI Strategy"):
 
-    # SMALL DELAY TO AVOID RATE LIMIT
-
-    time.sleep(1)
-
-    # =====================================================
     # AI GENERATED STRATEGY
-    # =====================================================
 
     if strategy_mode == "AI Generate Strategy":
 
@@ -892,9 +895,7 @@ if st.button("🚀 Generate AI Strategy"):
 
         st.json(strategy_json)
 
-    # =====================================================
     # LOAD DATA
-    # =====================================================
 
     data = load_data(
         ticker,
@@ -910,9 +911,7 @@ if st.button("🚀 Generate AI Strategy"):
         f"${latest_price:,.2f}"
     )
 
-    # =====================================================
-    # RECOMMENDATION ENGINE
-    # =====================================================
+    # STRATEGY RECOMMENDATION
 
     (
         recommended_strategy,
@@ -926,9 +925,7 @@ if st.button("🚀 Generate AI Strategy"):
 
     st.info(recommendation_text)
 
-    # =====================================================
     # APPLY STRATEGY
-    # =====================================================
 
     strategy_type = strategy_json[
         'strategy_type'
@@ -952,9 +949,7 @@ if st.button("🚀 Generate AI Strategy"):
 
         data = run_sma_strategy(data)
 
-    # =====================================================
     # BACKTEST
-    # =====================================================
 
     (
         data,
@@ -962,9 +957,7 @@ if st.button("🚀 Generate AI Strategy"):
         strategy_curve
     ) = backtest(data)
 
-    # =====================================================
     # METRICS
-    # =====================================================
 
     (
         strategy_return,
@@ -1003,9 +996,7 @@ if st.button("🚀 Generate AI Strategy"):
         f"{sharpe:.2f}"
     )
 
-    # =====================================================
     # STRATEGY COMPARISON
-    # =====================================================
 
     st.subheader(
         "⚔ Multi-Strategy Comparison"
@@ -1030,9 +1021,7 @@ if st.button("🚀 Generate AI Strategy"):
 {best_strategy['Strategy']}
 """)
 
-    # =====================================================
     # AI CONFIDENCE
-    # =====================================================
 
     confidence = min(
         max(
@@ -1052,9 +1041,7 @@ if st.button("🚀 Generate AI Strategy"):
         f"AI Confidence Score: {confidence}%"
     )
 
-    # =====================================================
-    # SMART ALERT SYSTEM
-    # =====================================================
+    # SMART ALERTS
 
     st.subheader(
         "🚨 Smart Trading Alerts"
@@ -1120,9 +1107,7 @@ if st.button("🚀 Generate AI Strategy"):
             "⚪ HOLD / NO ACTIVE SIGNAL"
         )
 
-    # =====================================================
     # ALERT HISTORY
-    # =====================================================
 
     st.subheader(
         "📋 Alert History"
@@ -1147,9 +1132,7 @@ if st.button("🚀 Generate AI Strategy"):
             "No alerts generated yet."
         )
 
-    # =====================================================
     # CHARTS
-    # =====================================================
 
     st.subheader(
         "📈 Trading Signals"
@@ -1157,9 +1140,7 @@ if st.button("🚀 Generate AI Strategy"):
 
     plot_chart(data, ticker)
 
-    # =====================================================
     # AI EXPLANATION
-    # =====================================================
 
     st.subheader(
         "🤖 AI Strategy Explanation"
@@ -1171,9 +1152,7 @@ if st.button("🚀 Generate AI Strategy"):
 
     st.write(explanation)
 
-    # =====================================================
     # MARKET DATA
-    # =====================================================
 
     st.subheader(
         "📋 Market Data"
@@ -1183,9 +1162,7 @@ if st.button("🚀 Generate AI Strategy"):
         data.tail(20)
     )
 
-    # =====================================================
     # FINAL SUMMARY
-    # =====================================================
 
     st.subheader(
         "🚀 AI Trading Summary"
