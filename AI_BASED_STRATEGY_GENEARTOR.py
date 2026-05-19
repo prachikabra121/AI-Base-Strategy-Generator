@@ -1,6 +1,6 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FULL PRODUCTION VERSION
+# FULL STABLE PRODUCTION VERSION
 # =========================================================
 #
 # FEATURES:
@@ -45,6 +45,7 @@ import google.generativeai as genai
 import numpy as np
 import json
 from datetime import datetime
+import time
 
 # =========================================================
 # PAGE CONFIG
@@ -373,7 +374,7 @@ Include:
         return "AI explanation unavailable."
 
 # =========================================================
-# LOAD DATA WITH RATE LIMIT FIX
+# LOAD DATA (RATE LIMIT FIX VERSION)
 # =========================================================
 
 @st.cache_data(ttl=3600)
@@ -384,27 +385,18 @@ def load_data(symbol, period):
 
     try:
 
-        ticker_data = yf.Ticker(symbol)
-
-        df = ticker_data.history(
+        df = yf.download(
+            tickers=symbol,
             period=period,
             interval="1d",
-            auto_adjust=True
+            auto_adjust=True,
+            progress=False,
+            threads=False
         )
 
-        # FALLBACK METHOD
-
-        if df is None or df.empty:
-
-            df = yf.download(
-                symbol,
-                period=period,
-                interval="1d",
-                auto_adjust=True,
-                progress=False
-            )
-
+        # =================================================
         # VALIDATION
+        # =================================================
 
         if df is None or df.empty:
 
@@ -414,17 +406,44 @@ def load_data(symbol, period):
 
             st.stop()
 
+        # =================================================
         # CLEAN DATA
+        # =================================================
 
         df = df.dropna()
 
-        if len(df) < 50:
+        # =================================================
+        # FIX MULTI INDEX
+        # =================================================
 
-            st.error(
-                "❌ Not enough historical data."
-            )
+        if isinstance(
+            df.columns,
+            pd.MultiIndex
+        ):
 
-            st.stop()
+            df.columns = df.columns.get_level_values(0)
+
+        # =================================================
+        # REQUIRED COLUMNS
+        # =================================================
+
+        required_cols = [
+            'Open',
+            'High',
+            'Low',
+            'Close',
+            'Volume'
+        ]
+
+        for col in required_cols:
+
+            if col not in df.columns:
+
+                st.error(
+                    f"Missing column: {col}"
+                )
+
+                st.stop()
 
         return df
 
@@ -435,9 +454,12 @@ def load_data(symbol, period):
         )
 
         st.info("""
-Yahoo Finance rate limit hit.
+Yahoo Finance temporarily rate-limited requests.
 
-Please wait 1-2 minutes and retry.
+Solutions:
+1. Wait 1 minute
+2. Restart app
+3. Change ticker
 """)
 
         st.stop()
@@ -467,19 +489,14 @@ def recommend_strategy(df):
         * np.sqrt(252)
     )
 
-    latest_sma50 = sma50.iloc[-1]
-
-    latest_sma200 = sma200.iloc[-1]
-
-    if latest_sma50 > latest_sma200:
+    if sma50.iloc[-1] > sma200.iloc[-1]:
 
         recommendation = "SMA"
 
         explanation = """
-📈 Market Regime:
-Trending Bullish Market
+📈 Trending Market Detected
 
-✅ Recommended Strategy:
+✅ Recommended:
 SMA Trend Following
 """
 
@@ -488,10 +505,9 @@ SMA Trend Following
         recommendation = "RSI"
 
         explanation = """
-📉 Market Regime:
-Sideways Market
+📉 Sideways Market Detected
 
-✅ Recommended Strategy:
+✅ Recommended:
 RSI Mean Reversion
 """
 
@@ -607,10 +623,8 @@ def backtest(df):
         df['Close'].pct_change()
     )
 
-    df['Position'] = df['Signal']
-
     df['Position'] = (
-        df['Position']
+        df['Signal']
         .replace(0, np.nan)
         .ffill()
         .fillna(0)
@@ -658,8 +672,7 @@ def backtest(df):
 def calculate_metrics(
     strategy_curve,
     market_curve,
-    df,
-    period
+    df
 ):
 
     strategy_return = (
@@ -698,7 +711,7 @@ def calculate_metrics(
 # MULTI STRATEGY COMPARISON
 # =========================================================
 
-def compare_strategies(df, period):
+def compare_strategies(df):
 
     results = []
 
@@ -726,8 +739,7 @@ def compare_strategies(df, period):
     ) = calculate_metrics(
         rsi_strategy,
         rsi_market,
-        rsi_df,
-        period
+        rsi_df
     )
 
     results.append({
@@ -758,8 +770,7 @@ def compare_strategies(df, period):
     ) = calculate_metrics(
         sma_strategy,
         sma_market,
-        sma_df,
-        period
+        sma_df
     )
 
     results.append({
@@ -771,7 +782,7 @@ def compare_strategies(df, period):
     return pd.DataFrame(results)
 
 # =========================================================
-# PRICE CHART
+# CHART
 # =========================================================
 
 def plot_chart(df, ticker):
@@ -828,6 +839,10 @@ def plot_chart(df, ticker):
 # =========================================================
 
 if st.button("🚀 Generate AI Strategy"):
+
+    # SMALL DELAY TO AVOID RATE LIMIT
+
+    time.sleep(1)
 
     # =====================================================
     # AI GENERATED STRATEGY
@@ -959,8 +974,7 @@ if st.button("🚀 Generate AI Strategy"):
     ) = calculate_metrics(
         strategy_curve,
         market_curve,
-        data,
-        period
+        data
     )
 
     st.subheader(
@@ -998,8 +1012,7 @@ if st.button("🚀 Generate AI Strategy"):
     )
 
     comparison_df = compare_strategies(
-        data.copy(),
-        period
+        data.copy()
     )
 
     st.dataframe(
@@ -1055,8 +1068,6 @@ if st.button("🚀 Generate AI Strategy"):
         "%Y-%m-%d %H:%M:%S"
     )
 
-    # BUY
-
     if latest_signal == 1:
 
         st.toast(
@@ -1080,8 +1091,6 @@ if st.button("🚀 Generate AI Strategy"):
             ),
             "Confidence": confidence
         })
-
-    # SELL
 
     elif latest_signal == -1:
 
