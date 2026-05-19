@@ -1,6 +1,20 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FINAL PRODUCTION VERSION
+# NEXT-GEN AI AGENT VERSION
+# =========================================================
+#
+# FEATURES:
+#
+# ✅ AI Strategy Generator
+# ✅ AI Strategy Recommendation Engine
+# ✅ AI Strategy Explanation
+# ✅ RSI Strategy
+# ✅ SMA Strategy
+# ✅ Professional Backtesting
+# ✅ Risk Analytics
+# ✅ Vibe Coding Experience
+# ✅ Stocks / Crypto / ETFs / Indexes
+#
 # =========================================================
 #
 # INSTALL:
@@ -58,13 +72,13 @@ model = genai.GenerativeModel(
 st.title("🚀 AI Quant Trading Platform")
 
 st.write("""
-AI-powered trading platform with:
+Build AI-powered trading systems using:
 
-✅ Strategy Recommendation Engine
-✅ AI Strategy Parsing
-✅ Professional Backtesting
-✅ Risk Analytics
-✅ Stocks / Crypto / ETFs / Indexes
+✅ Generative AI  
+✅ Vibe Coding  
+✅ Quantitative Trading  
+✅ AI Agents  
+✅ Natural Language Prompts  
 """)
 
 # =========================================================
@@ -145,13 +159,27 @@ st.sidebar.success(
 )
 
 # =========================================================
-# STRATEGY INPUT
+# STRATEGY MODE
 # =========================================================
 
-strategy_text = st.text_area(
-    "Describe Your Trading Strategy",
-    height=180,
-    placeholder="""
+strategy_mode = st.radio(
+    "Strategy Mode",
+    [
+        "Manual Strategy",
+        "AI Generate Strategy"
+    ]
+)
+
+# =========================================================
+# MANUAL STRATEGY
+# =========================================================
+
+if strategy_mode == "Manual Strategy":
+
+    strategy_text = st.text_area(
+        "Describe Your Trading Strategy",
+        height=180,
+        placeholder="""
 Examples:
 
 Buy when RSI is below 30
@@ -161,7 +189,92 @@ Buy when 20 SMA crosses above 50 SMA
 
 Buy when trend becomes bullish
 """
-)
+    )
+
+# =========================================================
+# AI GENERATED STRATEGY
+# =========================================================
+
+else:
+
+    ai_strategy_prompt = st.text_area(
+        "Describe What Kind of Strategy You Want",
+        height=180,
+        placeholder="""
+Examples:
+
+Create bullish strategy for trending market
+
+Create low-risk swing trading strategy
+
+Create momentum strategy for crypto
+
+Create breakout strategy for volatile stocks
+"""
+    )
+
+# =========================================================
+# AI STRATEGY CREATOR
+# =========================================================
+
+def generate_ai_strategy(user_prompt):
+
+    prompt = f"""
+You are an expert quantitative trader.
+
+Create a professional trading strategy.
+
+User Request:
+{user_prompt}
+
+Return ONLY valid JSON.
+
+Format:
+
+{{
+    "strategy_name":"",
+    "strategy_type":"",
+    "entry":"",
+    "exit":"",
+    "stop_loss":"",
+    "take_profit":"",
+    "risk_level":""
+}}
+
+Supported strategy types:
+- RSI
+- SMA
+"""
+
+    try:
+
+        response = model.generate_content(prompt)
+
+        content = response.text
+
+        content = content.replace(
+            "```json",
+            ""
+        )
+
+        content = content.replace(
+            "```",
+            ""
+        )
+
+        return json.loads(content)
+
+    except:
+
+        return {
+            "strategy_name":"Fallback Strategy",
+            "strategy_type":"SMA",
+            "entry":"20 SMA crosses above 50 SMA",
+            "exit":"20 SMA crosses below 50 SMA",
+            "stop_loss":"5%",
+            "take_profit":"10%",
+            "risk_level":"Medium"
+        }
 
 # =========================================================
 # AI STRATEGY PARSER
@@ -224,7 +337,7 @@ SMA FORMAT:
         }
 
 # =========================================================
-# AI STRATEGY EXPLANATION
+# AI EXPLANATION
 # =========================================================
 
 def explain_strategy(strategy):
@@ -261,17 +374,14 @@ def load_data(symbol, period):
 
     try:
 
-        # CREATE TICKER OBJECT
         ticker_data = yf.Ticker(symbol)
 
-        # FETCH HISTORICAL DATA
         df = ticker_data.history(
             period=period,
             interval="1d",
             auto_adjust=True
         )
 
-        # EMPTY CHECK
         if df is None or df.empty:
 
             st.error(
@@ -280,10 +390,8 @@ def load_data(symbol, period):
 
             st.stop()
 
-        # REMOVE NaN
         df = df.dropna()
 
-        # MINIMUM DATA CHECK
         if len(df) < 50:
 
             st.error(
@@ -467,12 +575,12 @@ def backtest(df):
 
     transaction_cost = 0.001
 
-    # DAILY RETURNS
+    # RETURNS
     df['Returns'] = (
         df['Close'].pct_change()
     )
 
-    # POSITION TRACKING
+    # POSITION
     df['Position'] = df['Signal']
 
     df['Position'] = (
@@ -489,7 +597,7 @@ def backtest(df):
         df['Position'].shift(1)
     )
 
-    # APPLY TRANSACTION COST
+    # COST
     df['Strategy_Returns'] = (
         df['Strategy_Returns']
         -
@@ -595,14 +703,13 @@ def calculate_metrics(
     )
 
 # =========================================================
-# CHART
+# PRICE CHART
 # =========================================================
 
 def plot_chart(df, ticker):
 
     fig = go.Figure()
 
-    # PRICE
     fig.add_trace(
         go.Scatter(
             x=df.index,
@@ -612,7 +719,6 @@ def plot_chart(df, ticker):
         )
     )
 
-    # BUY SIGNALS
     buy_signals = df[
         df['Signal'] == 1
     ]
@@ -626,7 +732,6 @@ def plot_chart(df, ticker):
         )
     )
 
-    # SELL SIGNALS
     sell_signals = df[
         df['Signal'] == -1
     ]
@@ -693,30 +798,66 @@ def plot_equity_curve(
 
 if st.button("🚀 Generate AI Strategy"):
 
-    if strategy_text.strip() == "":
+    # =====================================================
+    # AI STRATEGY GENERATION
+    # =====================================================
 
-        st.warning(
-            "Please enter strategy."
+    if strategy_mode == "AI Generate Strategy":
+
+        with st.spinner(
+            "🤖 AI is creating strategy..."
+        ):
+
+            generated_strategy = generate_ai_strategy(
+                ai_strategy_prompt
+            )
+
+        st.subheader(
+            "🤖 AI Generated Strategy"
         )
 
-        st.stop()
+        st.json(generated_strategy)
 
-    # AI ANALYSIS
-    with st.spinner(
-        "🤖 AI is analyzing strategy..."
-    ):
+        strategy_text = generated_strategy[
+            'entry'
+        ]
 
         strategy_json = parse_strategy(
             strategy_text
         )
 
-    st.subheader(
-        "🤖 AI Strategy Analysis"
-    )
+    # =====================================================
+    # MANUAL STRATEGY
+    # =====================================================
 
-    st.json(strategy_json)
+    else:
 
+        if strategy_text.strip() == "":
+
+            st.warning(
+                "Please enter strategy."
+            )
+
+            st.stop()
+
+        with st.spinner(
+            "🤖 AI is analyzing strategy..."
+        ):
+
+            strategy_json = parse_strategy(
+                strategy_text
+            )
+
+        st.subheader(
+            "🤖 AI Strategy Analysis"
+        )
+
+        st.json(strategy_json)
+
+    # =====================================================
     # LOAD DATA
+    # =====================================================
+
     data = load_data(
         ticker,
         period
@@ -732,7 +873,10 @@ if st.button("🚀 Generate AI Strategy"):
         f"${latest_price:,.2f}"
     )
 
-    # STRATEGY RECOMMENDATION
+    # =====================================================
+    # STRATEGY RECOMMENDATION ENGINE
+    # =====================================================
+
     (
         recommended_strategy,
         recommendation_text,
@@ -750,7 +894,10 @@ if st.button("🚀 Generate AI Strategy"):
         f"{market_volatility:.2%}"
     )
 
+    # =====================================================
     # APPLY STRATEGY
+    # =====================================================
+
     strategy_type = strategy_json[
         'strategy_type'
     ]
@@ -759,22 +906,34 @@ if st.button("🚀 Generate AI Strategy"):
 
         data = run_rsi_strategy(
             data,
-            strategy_json['buy_value'],
-            strategy_json['sell_value']
+            strategy_json.get(
+                'buy_value',
+                30
+            ),
+            strategy_json.get(
+                'sell_value',
+                70
+            )
         )
 
     else:
 
         data = run_sma_strategy(data)
 
+    # =====================================================
     # BACKTEST
+    # =====================================================
+
     (
         data,
         market_curve,
         strategy_curve
     ) = backtest(data)
 
+    # =====================================================
     # METRICS
+    # =====================================================
+
     (
         strategy_return,
         market_return,
@@ -789,7 +948,10 @@ if st.button("🚀 Generate AI Strategy"):
         period
     )
 
-    # PERFORMANCE
+    # =====================================================
+    # PERFORMANCE METRICS
+    # =====================================================
+
     st.subheader(
         "📊 Performance Metrics"
     )
@@ -828,7 +990,10 @@ if st.button("🚀 Generate AI Strategy"):
         f"{sharpe:.2f}"
     )
 
-    # RISK ANALYSIS
+    # =====================================================
+    # AI RISK ANALYSIS
+    # =====================================================
+
     st.subheader(
         "🧠 AI Risk Analysis"
     )
@@ -863,7 +1028,10 @@ if st.button("🚀 Generate AI Strategy"):
         f"AI Confidence Score: {confidence}%"
     )
 
-    # TREND
+    # =====================================================
+    # TREND ANALYSIS
+    # =====================================================
+
     if latest_price > data[
         'Close'
     ].mean():
@@ -878,7 +1046,10 @@ if st.button("🚀 Generate AI Strategy"):
             "📉 Bearish Trend Detected"
         )
 
+    # =====================================================
     # SIGNAL
+    # =====================================================
+
     latest_signal = data[
         'Signal'
     ].iloc[-1]
@@ -901,7 +1072,10 @@ if st.button("🚀 Generate AI Strategy"):
             "⚪ HOLD / NO ACTIVE SIGNAL"
         )
 
+    # =====================================================
     # CHARTS
+    # =====================================================
+
     st.subheader(
         "📈 Trading Signals"
     )
@@ -917,7 +1091,10 @@ if st.button("🚀 Generate AI Strategy"):
         strategy_curve
     )
 
+    # =====================================================
     # AI EXPLANATION
+    # =====================================================
+
     st.subheader(
         "🤖 AI Strategy Explanation"
     )
@@ -928,7 +1105,10 @@ if st.button("🚀 Generate AI Strategy"):
 
     st.write(explanation)
 
+    # =====================================================
     # MARKET DATA
+    # =====================================================
+
     st.subheader(
         "📋 Market Data"
     )
@@ -937,7 +1117,10 @@ if st.button("🚀 Generate AI Strategy"):
         data.tail(20)
     )
 
+    # =====================================================
     # FINAL SUMMARY
+    # =====================================================
+
     st.subheader(
         "🚀 AI Trading Summary"
     )
@@ -955,7 +1138,7 @@ if st.button("🚀 Generate AI Strategy"):
 
 ✅ Historical Period Tested: {period}
 
-This platform demonstrates how AI can help
-traders build intelligent quantitative trading
-systems using natural language prompts.
+This platform demonstrates how Generative AI,
+AI Agents, and Vibe Coding can build
+next-generation quantitative trading systems.
 """)
