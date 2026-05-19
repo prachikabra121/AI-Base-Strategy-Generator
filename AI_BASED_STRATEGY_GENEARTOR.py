@@ -1,6 +1,6 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FULL UPDATED PROFESSIONAL VERSION
+# FULL FINAL STABLE VERSION
 # =========================================================
 #
 # INSTALL:
@@ -28,18 +28,6 @@ import json
 import numpy as np
 
 # =========================================================
-# GEMINI CONFIG
-# =========================================================
-
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-
-genai.configure(api_key=GEMINI_API_KEY)
-
-model = genai.GenerativeModel(
-    "gemini-2.5-flash"
-)
-
-# =========================================================
 # PAGE CONFIG
 # =========================================================
 
@@ -47,6 +35,20 @@ st.set_page_config(
     page_title="AI Quant Trading Platform",
     page_icon="🚀",
     layout="wide"
+)
+
+# =========================================================
+# GEMINI CONFIG
+# =========================================================
+
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+
+genai.configure(
+    api_key=GEMINI_API_KEY
+)
+
+model = genai.GenerativeModel(
+    "gemini-2.5-flash"
 )
 
 # =========================================================
@@ -179,11 +181,11 @@ def parse_strategy(strategy):
     prompt = f"""
 You are an AI quant trading assistant.
 
-Analyze this strategy:
+Analyze this trading strategy:
 
 {strategy}
 
-Supported strategy types:
+Supported strategies:
 1. RSI
 2. SMA
 
@@ -266,35 +268,52 @@ def load_data(symbol, period):
     try:
 
         df = yf.download(
-            symbol,
+            tickers=symbol,
             period=period,
+            interval="1d",
             auto_adjust=True,
+            progress=False,
             threads=False
         )
 
-        if df.empty:
+        # EMPTY CHECK
+        if df is None or df.empty:
 
             st.error(
-                "❌ Invalid ticker or no data found."
+                f"❌ No market data found for {symbol}"
             )
 
             st.stop()
 
-        # FIX MULTI INDEX
+        # MULTI INDEX FIX
         if isinstance(
             df.columns,
             pd.MultiIndex
         ):
 
             df.columns = (
-                df.columns.droplevel(1)
+                df.columns.get_level_values(0)
             )
+
+        # REMOVE NaN
+        df = df.dropna()
+
+        # MINIMUM DATA CHECK
+        if len(df) < 50:
+
+            st.error(
+                "❌ Not enough historical data."
+            )
+
+            st.stop()
 
         return df
 
     except Exception as e:
 
-        st.error(f"Error: {e}")
+        st.error(
+            f"Data Loading Error: {e}"
+        )
 
         st.stop()
 
@@ -309,7 +328,7 @@ def run_rsi_strategy(
 ):
 
     rsi = RSIIndicator(
-        df['Close']
+        close=df['Close']
     )
 
     df['RSI'] = rsi.rsi()
@@ -343,18 +362,22 @@ def run_rsi_strategy(
 def run_sma_strategy(df):
 
     sma20 = SMAIndicator(
-        df['Close'],
+        close=df['Close'],
         window=20
     )
 
     sma50 = SMAIndicator(
-        df['Close'],
+        close=df['Close'],
         window=50
     )
 
-    df['SMA20'] = sma20.sma_indicator()
+    df['SMA20'] = (
+        sma20.sma_indicator()
+    )
 
-    df['SMA50'] = sma50.sma_indicator()
+    df['SMA50'] = (
+        sma50.sma_indicator()
+    )
 
     df['Signal'] = 0
 
@@ -385,7 +408,7 @@ def run_sma_strategy(df):
     return df
 
 # =========================================================
-# PROFESSIONAL BACKTEST ENGINE
+# BACKTEST ENGINE
 # =========================================================
 
 def backtest(df):
@@ -421,6 +444,12 @@ def backtest(df):
             transaction_cost *
             abs(df['Position'].diff())
         )
+    )
+
+    # REMOVE NaN
+    df['Strategy_Returns'] = (
+        df['Strategy_Returns']
+        .fillna(0)
     )
 
     # EQUITY CURVES
@@ -507,6 +536,11 @@ def calculate_metrics(
         /
         df['Strategy_Returns'].std()
     ) * np.sqrt(252)
+
+    # HANDLE NaN SHARPE
+    if np.isnan(sharpe):
+
+        sharpe = 0
 
     return (
         strategy_return,
