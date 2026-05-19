@@ -1,6 +1,6 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FULL SMART ALERT + AI AGENT VERSION
+# FULL PRODUCTION VERSION
 # =========================================================
 #
 # FEATURES:
@@ -17,6 +17,7 @@
 # ✅ Risk Analytics
 # ✅ Vibe Coding Experience
 # ✅ Stocks / Crypto / ETFs / Indexes
+# ✅ Yahoo Finance Rate Limit Fix
 #
 # =========================================================
 #
@@ -296,17 +297,11 @@ Supported:
 def parse_strategy(strategy):
 
     prompt = f"""
-You are an AI trading assistant.
-
-Analyze this strategy:
+Analyze this trading strategy:
 
 {strategy}
 
-Supported:
-1. RSI
-2. SMA
-
-Return ONLY valid JSON.
+Return ONLY JSON.
 
 RSI FORMAT:
 
@@ -378,8 +373,10 @@ Include:
         return "AI explanation unavailable."
 
 # =========================================================
-# LOAD DATA
+# LOAD DATA WITH RATE LIMIT FIX
 # =========================================================
+
+@st.cache_data(ttl=3600)
 
 def load_data(symbol, period):
 
@@ -395,6 +392,20 @@ def load_data(symbol, period):
             auto_adjust=True
         )
 
+        # FALLBACK METHOD
+
+        if df is None or df.empty:
+
+            df = yf.download(
+                symbol,
+                period=period,
+                interval="1d",
+                auto_adjust=True,
+                progress=False
+            )
+
+        # VALIDATION
+
         if df is None or df.empty:
 
             st.error(
@@ -402,6 +413,8 @@ def load_data(symbol, period):
             )
 
             st.stop()
+
+        # CLEAN DATA
 
         df = df.dropna()
 
@@ -420,6 +433,12 @@ def load_data(symbol, period):
         st.error(
             f"Data Loading Error: {e}"
         )
+
+        st.info("""
+Yahoo Finance rate limit hit.
+
+Please wait 1-2 minutes and retry.
+""")
 
         st.stop()
 
@@ -462,10 +481,6 @@ Trending Bullish Market
 
 ✅ Recommended Strategy:
 SMA Trend Following
-
-Reason:
-Asset is trading in a strong
-long-term bullish trend.
 """
 
     else:
@@ -474,14 +489,10 @@ long-term bullish trend.
 
         explanation = """
 📉 Market Regime:
-Range-Bound / Sideways Market
+Sideways Market
 
 ✅ Recommended Strategy:
 RSI Mean Reversion
-
-Reason:
-Market is less directional and
-better suited for reversal trading.
 """
 
     return (
@@ -509,6 +520,7 @@ def run_rsi_strategy(
     df['Signal'] = 0
 
     # BUY
+
     df.loc[
         (
             (df['RSI'] < buy_value) &
@@ -518,6 +530,7 @@ def run_rsi_strategy(
     ] = 1
 
     # SELL
+
     df.loc[
         (
             (df['RSI'] > sell_value) &
@@ -555,6 +568,7 @@ def run_sma_strategy(df):
     df['Signal'] = 0
 
     # BUY
+
     df.loc[
         (
             (df['SMA20'] > df['SMA50']) &
@@ -567,6 +581,7 @@ def run_sma_strategy(df):
     ] = 1
 
     # SELL
+
     df.loc[
         (
             (df['SMA20'] < df['SMA50']) &
@@ -657,35 +672,6 @@ def calculate_metrics(
         * 100
     )
 
-    years_map = {
-        "6mo":0.5,
-        "1y":1,
-        "2y":2,
-        "5y":5,
-        "10y":10
-    }
-
-    years = years_map[period]
-
-    cagr = (
-        (
-            strategy_curve.iloc[-1]
-        ) ** (1 / years) - 1
-    ) * 100
-
-    rolling_max = (
-        strategy_curve.cummax()
-    )
-
-    drawdown = (
-        strategy_curve -
-        rolling_max
-    ) / rolling_max
-
-    max_drawdown = (
-        drawdown.min() * 100
-    )
-
     volatility = (
         df['Returns'].std()
         * np.sqrt(252)
@@ -704,21 +690,20 @@ def calculate_metrics(
     return (
         strategy_return,
         market_return,
-        cagr,
-        max_drawdown,
         volatility,
         sharpe
     )
 
 # =========================================================
-# MULTI STRATEGY COMPARISON ENGINE
+# MULTI STRATEGY COMPARISON
 # =========================================================
 
 def compare_strategies(df, period):
 
-    comparison_results = []
+    results = []
 
-    # RSI STRATEGY
+    # RSI
+
     rsi_df = df.copy()
 
     rsi_df = run_rsi_strategy(
@@ -729,33 +714,30 @@ def compare_strategies(df, period):
 
     (
         rsi_df,
-        rsi_market_curve,
-        rsi_strategy_curve
+        rsi_market,
+        rsi_strategy
     ) = backtest(rsi_df)
 
     (
         rsi_return,
-        rsi_market_return,
-        rsi_cagr,
-        rsi_drawdown,
-        rsi_volatility,
+        _,
+        _,
         rsi_sharpe
     ) = calculate_metrics(
-        rsi_strategy_curve,
-        rsi_market_curve,
+        rsi_strategy,
+        rsi_market,
         rsi_df,
         period
     )
 
-    comparison_results.append({
+    results.append({
         "Strategy":"RSI",
         "Return %":round(rsi_return, 2),
-        "CAGR %":round(rsi_cagr, 2),
-        "Sharpe":round(rsi_sharpe, 2),
-        "Drawdown %":round(rsi_drawdown, 2)
+        "Sharpe":round(rsi_sharpe, 2)
     })
 
-    # SMA STRATEGY
+    # SMA
+
     sma_df = df.copy()
 
     sma_df = run_sma_strategy(
@@ -764,40 +746,32 @@ def compare_strategies(df, period):
 
     (
         sma_df,
-        sma_market_curve,
-        sma_strategy_curve
+        sma_market,
+        sma_strategy
     ) = backtest(sma_df)
 
     (
         sma_return,
-        sma_market_return,
-        sma_cagr,
-        sma_drawdown,
-        sma_volatility,
+        _,
+        _,
         sma_sharpe
     ) = calculate_metrics(
-        sma_strategy_curve,
-        sma_market_curve,
+        sma_strategy,
+        sma_market,
         sma_df,
         period
     )
 
-    comparison_results.append({
+    results.append({
         "Strategy":"SMA",
         "Return %":round(sma_return, 2),
-        "CAGR %":round(sma_cagr, 2),
-        "Sharpe":round(sma_sharpe, 2),
-        "Drawdown %":round(sma_drawdown, 2)
+        "Sharpe":round(sma_sharpe, 2)
     })
 
-    comparison_df = pd.DataFrame(
-        comparison_results
-    )
-
-    return comparison_df
+    return pd.DataFrame(results)
 
 # =========================================================
-# CHART
+# PRICE CHART
 # =========================================================
 
 def plot_chart(df, ticker):
@@ -817,6 +791,10 @@ def plot_chart(df, ticker):
         df['Signal'] == 1
     ]
 
+    sell_signals = df[
+        df['Signal'] == -1
+    ]
+
     fig.add_trace(
         go.Scatter(
             x=buy_signals.index,
@@ -825,10 +803,6 @@ def plot_chart(df, ticker):
             name='BUY'
         )
     )
-
-    sell_signals = df[
-        df['Signal'] == -1
-    ]
 
     fig.add_trace(
         go.Scatter(
@@ -842,43 +816,6 @@ def plot_chart(df, ticker):
     fig.update_layout(
         title=f"{ticker} Trading Signals",
         height=600
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True
-    )
-
-# =========================================================
-# EQUITY CURVE
-# =========================================================
-
-def plot_equity_curve(
-    market_curve,
-    strategy_curve
-):
-
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Scatter(
-            y=market_curve,
-            mode='lines',
-            name='Market'
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            y=strategy_curve,
-            mode='lines',
-            name='Strategy'
-        )
-    )
-
-    fig.update_layout(
-        title="Strategy vs Market",
-        height=500
     )
 
     st.plotly_chart(
@@ -930,13 +867,9 @@ if st.button("🚀 Generate AI Strategy"):
 
             st.stop()
 
-        with st.spinner(
-            "🤖 AI is analyzing strategy..."
-        ):
-
-            strategy_json = parse_strategy(
-                strategy_text
-            )
+        strategy_json = parse_strategy(
+            strategy_text
+        )
 
         st.subheader(
             "🤖 AI Strategy Analysis"
@@ -963,7 +896,7 @@ if st.button("🚀 Generate AI Strategy"):
     )
 
     # =====================================================
-    # STRATEGY RECOMMENDATION
+    # RECOMMENDATION ENGINE
     # =====================================================
 
     (
@@ -977,11 +910,6 @@ if st.button("🚀 Generate AI Strategy"):
     )
 
     st.info(recommendation_text)
-
-    st.metric(
-        "Market Volatility",
-        f"{market_volatility:.2%}"
-    )
 
     # =====================================================
     # APPLY STRATEGY
@@ -1026,8 +954,6 @@ if st.button("🚀 Generate AI Strategy"):
     (
         strategy_return,
         market_return,
-        cagr,
-        max_drawdown,
         volatility,
         sharpe
     ) = calculate_metrics(
@@ -1037,15 +963,11 @@ if st.button("🚀 Generate AI Strategy"):
         period
     )
 
-    # =====================================================
-    # PERFORMANCE METRICS
-    # =====================================================
-
     st.subheader(
         "📊 Performance Metrics"
     )
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     col1.metric(
         "Strategy Return",
@@ -1058,38 +980,26 @@ if st.button("🚀 Generate AI Strategy"):
     )
 
     col3.metric(
-        "CAGR",
-        f"{cagr:.2f}%"
-    )
-
-    col4, col5, col6 = st.columns(3)
-
-    col4.metric(
-        "Max Drawdown",
-        f"{max_drawdown:.2f}%"
-    )
-
-    col5.metric(
         "Volatility",
         f"{volatility:.2f}%"
     )
 
-    col6.metric(
+    col4.metric(
         "Sharpe Ratio",
         f"{sharpe:.2f}"
     )
 
     # =====================================================
-    # MULTI STRATEGY COMPARISON
+    # STRATEGY COMPARISON
     # =====================================================
+
+    st.subheader(
+        "⚔ Multi-Strategy Comparison"
+    )
 
     comparison_df = compare_strategies(
         data.copy(),
         period
-    )
-
-    st.subheader(
-        "⚔ Multi-Strategy Comparison"
     )
 
     st.dataframe(
@@ -1097,46 +1007,19 @@ if st.button("🚀 Generate AI Strategy"):
         use_container_width=True
     )
 
-    # =====================================================
-    # BEST STRATEGY DETECTION
-    # =====================================================
-
     best_strategy = comparison_df.sort_values(
         by="Sharpe",
         ascending=False
     ).iloc[0]
 
     st.success(f"""
-🏆 Best Strategy Detected:
+🏆 Best Strategy:
 {best_strategy['Strategy']}
-
-Sharpe Ratio:
-{best_strategy['Sharpe']}
 """)
 
     # =====================================================
-    # AI RISK ANALYSIS
+    # AI CONFIDENCE
     # =====================================================
-
-    st.subheader(
-        "🧠 AI Risk Analysis"
-    )
-
-    if sharpe > 1:
-
-        risk_level = "Low"
-
-    elif sharpe > 0.5:
-
-        risk_level = "Medium"
-
-    else:
-
-        risk_level = "High"
-
-    st.write(
-        f"AI Risk Assessment: {risk_level}"
-    )
 
     confidence = min(
         max(
@@ -1144,6 +1027,10 @@ Sharpe Ratio:
             40
         ),
         95
+    )
+
+    st.subheader(
+        "🧠 AI Risk Analysis"
     )
 
     st.progress(confidence)
@@ -1168,7 +1055,8 @@ Sharpe Ratio:
         "%Y-%m-%d %H:%M:%S"
     )
 
-    # BUY SIGNAL
+    # BUY
+
     if latest_signal == 1:
 
         st.toast(
@@ -1181,34 +1069,20 @@ Sharpe Ratio:
             f"🚀 STRONG BUY SIGNAL DETECTED for {ticker}"
         )
 
-        st.info(f"""
-Entry Price:
-${latest_price:.2f}
-
-AI Confidence:
-{confidence}%
-
-Market Type:
-{market_type}
-""")
-
         st.session_state.alert_history.append({
 
             "Time": current_time,
-
             "Ticker": ticker,
-
             "Signal": "BUY",
-
             "Price": round(
                 latest_price,
                 2
             ),
-
             "Confidence": confidence
         })
 
-    # SELL SIGNAL
+    # SELL
+
     elif latest_signal == -1:
 
         st.toast(
@@ -1219,30 +1093,15 @@ Market Type:
             f"🔴 STRONG SELL SIGNAL DETECTED for {ticker}"
         )
 
-        st.warning(f"""
-Exit Price:
-${latest_price:.2f}
-
-AI Confidence:
-{confidence}%
-
-Market Type:
-{market_type}
-""")
-
         st.session_state.alert_history.append({
 
             "Time": current_time,
-
             "Ticker": ticker,
-
             "Signal": "SELL",
-
             "Price": round(
                 latest_price,
                 2
             ),
-
             "Confidence": confidence
         })
 
@@ -1288,15 +1147,6 @@ Market Type:
     )
 
     plot_chart(data, ticker)
-
-    st.subheader(
-        "📊 Equity Curve"
-    )
-
-    plot_equity_curve(
-        market_curve,
-        strategy_curve
-    )
 
     # =====================================================
     # AI EXPLANATION
