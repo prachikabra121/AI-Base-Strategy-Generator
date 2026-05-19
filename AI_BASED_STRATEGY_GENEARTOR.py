@@ -1,6 +1,6 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FULL PROFESSIONAL VERSION
+# FULL UPDATED PROFESSIONAL VERSION
 # =========================================================
 #
 # INSTALL:
@@ -78,7 +78,7 @@ st.sidebar.title("⚙ Platform Settings")
 ticker = st.sidebar.text_input(
     "Enter Any Stock / Crypto / ETF / Index",
     value="AAPL"
-)
+).strip().upper()
 
 period = st.sidebar.selectbox(
     "Select Time Period",
@@ -261,12 +261,15 @@ Include:
 
 def load_data(symbol, period):
 
+    st.write(f"Fetching data for: {symbol}")
+
     try:
 
         df = yf.download(
             symbol,
             period=period,
-            auto_adjust=True
+            auto_adjust=True,
+            threads=False
         )
 
         if df.empty:
@@ -277,6 +280,7 @@ def load_data(symbol, period):
 
             st.stop()
 
+        # FIX MULTI INDEX
         if isinstance(
             df.columns,
             pd.MultiIndex
@@ -312,7 +316,7 @@ def run_rsi_strategy(
 
     df['Signal'] = 0
 
-    # BUY CROSS
+    # BUY SIGNAL
     df.loc[
         (
             (df['RSI'] < buy_value) &
@@ -321,7 +325,7 @@ def run_rsi_strategy(
         'Signal'
     ] = 1
 
-    # SELL CROSS
+    # SELL SIGNAL
     df.loc[
         (
             (df['RSI'] > sell_value) &
@@ -348,13 +352,9 @@ def run_sma_strategy(df):
         window=50
     )
 
-    df['SMA20'] = (
-        sma20.sma_indicator()
-    )
+    df['SMA20'] = sma20.sma_indicator()
 
-    df['SMA50'] = (
-        sma50.sma_indicator()
-    )
+    df['SMA50'] = sma50.sma_indicator()
 
     df['Signal'] = 0
 
@@ -362,8 +362,10 @@ def run_sma_strategy(df):
     df.loc[
         (
             (df['SMA20'] > df['SMA50']) &
-            (df['SMA20'].shift(1)
-             <= df['SMA50'].shift(1))
+            (
+                df['SMA20'].shift(1)
+                <= df['SMA50'].shift(1)
+            )
         ),
         'Signal'
     ] = 1
@@ -372,8 +374,10 @@ def run_sma_strategy(df):
     df.loc[
         (
             (df['SMA20'] < df['SMA50']) &
-            (df['SMA20'].shift(1)
-             >= df['SMA50'].shift(1))
+            (
+                df['SMA20'].shift(1)
+                >= df['SMA50'].shift(1)
+            )
         ),
         'Signal'
     ] = -1
@@ -381,7 +385,7 @@ def run_sma_strategy(df):
     return df
 
 # =========================================================
-# BACKTEST ENGINE
+# PROFESSIONAL BACKTEST ENGINE
 # =========================================================
 
 def backtest(df):
@@ -394,13 +398,12 @@ def backtest(df):
     )
 
     # POSITION TRACKING
-    df['Position'] = (
-        df['Signal']
-        .replace(to_replace=0, method='ffill')
-    )
+    df['Position'] = df['Signal']
 
     df['Position'] = (
         df['Position']
+        .replace(0, np.nan)
+        .ffill()
         .fillna(0)
     )
 
@@ -410,10 +413,11 @@ def backtest(df):
         df['Position'].shift(1)
     )
 
-    # TRANSACTION COST
+    # APPLY TRANSACTION COST
     df['Strategy_Returns'] = (
         df['Strategy_Returns']
-        - (
+        -
+        (
             transaction_cost *
             abs(df['Position'].diff())
         )
@@ -427,6 +431,15 @@ def backtest(df):
     strategy_curve = (
         1 + df['Strategy_Returns']
     ).cumprod()
+
+    # CLEAN NaN
+    market_curve = (
+        market_curve.fillna(1)
+    )
+
+    strategy_curve = (
+        strategy_curve.fillna(1)
+    )
 
     return (
         df,
@@ -611,10 +624,7 @@ if st.button("🚀 Generate AI Strategy"):
 
         st.stop()
 
-    # -------------------------------------
     # AI ANALYSIS
-    # -------------------------------------
-
     with st.spinner(
         "🤖 AI is analyzing strategy..."
     ):
@@ -629,19 +639,13 @@ if st.button("🚀 Generate AI Strategy"):
 
     st.json(strategy_json)
 
-    # -------------------------------------
     # LOAD DATA
-    # -------------------------------------
-
     data = load_data(
         ticker,
         period
     )
 
-    # -------------------------------------
     # CURRENT PRICE
-    # -------------------------------------
-
     latest_price = data[
         'Close'
     ].iloc[-1]
@@ -651,10 +655,7 @@ if st.button("🚀 Generate AI Strategy"):
         f"${latest_price:,.2f}"
     )
 
-    # -------------------------------------
     # APPLY STRATEGY
-    # -------------------------------------
-
     strategy_type = strategy_json[
         'strategy_type'
     ]
@@ -671,20 +672,14 @@ if st.button("🚀 Generate AI Strategy"):
 
         data = run_sma_strategy(data)
 
-    # -------------------------------------
     # BACKTEST
-    # -------------------------------------
-
     (
         data,
         market_curve,
         strategy_curve
     ) = backtest(data)
 
-    # -------------------------------------
     # METRICS
-    # -------------------------------------
-
     (
         strategy_return,
         market_return,
@@ -699,10 +694,7 @@ if st.button("🚀 Generate AI Strategy"):
         period
     )
 
-    # -------------------------------------
-    # PERFORMANCE METRICS
-    # -------------------------------------
-
+    # PERFORMANCE
     st.subheader(
         "📊 Performance Metrics"
     )
@@ -741,10 +733,7 @@ if st.button("🚀 Generate AI Strategy"):
         f"{sharpe:.2f}"
     )
 
-    # -------------------------------------
     # AI RISK ANALYSIS
-    # -------------------------------------
-
     st.subheader(
         "🧠 AI Risk Analysis"
     )
@@ -779,10 +768,7 @@ if st.button("🚀 Generate AI Strategy"):
         f"AI Confidence Score: {confidence}%"
     )
 
-    # -------------------------------------
     # TREND ANALYSIS
-    # -------------------------------------
-
     if latest_price > data[
         'Close'
     ].mean():
@@ -797,10 +783,7 @@ if st.button("🚀 Generate AI Strategy"):
             "📉 Bearish Trend Detected"
         )
 
-    # -------------------------------------
-    # LATEST SIGNAL
-    # -------------------------------------
-
+    # SIGNAL
     latest_signal = data[
         'Signal'
     ].iloc[-1]
@@ -823,10 +806,7 @@ if st.button("🚀 Generate AI Strategy"):
             "⚪ HOLD / NO ACTIVE SIGNAL"
         )
 
-    # -------------------------------------
     # CHARTS
-    # -------------------------------------
-
     st.subheader(
         "📈 Trading Signals"
     )
@@ -842,10 +822,7 @@ if st.button("🚀 Generate AI Strategy"):
         strategy_curve
     )
 
-    # -------------------------------------
     # AI EXPLANATION
-    # -------------------------------------
-
     st.subheader(
         "🤖 AI Strategy Explanation"
     )
@@ -856,10 +833,7 @@ if st.button("🚀 Generate AI Strategy"):
 
     st.write(explanation)
 
-    # -------------------------------------
-    # MARKET DATA
-    # -------------------------------------
-
+    # DATA
     st.subheader(
         "📋 Market Data"
     )
@@ -868,10 +842,7 @@ if st.button("🚀 Generate AI Strategy"):
         data.tail(20)
     )
 
-    # -------------------------------------
     # FINAL SUMMARY
-    # -------------------------------------
-
     st.subheader(
         "🚀 AI Trading Summary"
     )
