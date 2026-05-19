@@ -296,55 +296,68 @@ Supported:
 # AI STRATEGY PARSER
 # =========================================================
 
+# =========================================================
+# AI STRATEGY PARSER
+# =========================================================
+
 def parse_strategy(strategy):
 
-    prompt = f"""
-Analyze this trading strategy:
+    strategy = strategy.lower()
 
-{strategy}
+    # =============================================
+    # RSI DETECTION
+    # =============================================
 
-Return ONLY JSON.
+    if "rsi" in strategy:
 
-RSI FORMAT:
+        import re
 
-{{
-    "strategy_type":"RSI",
-    "buy_value":30,
-    "sell_value":70
-}}
+        numbers = re.findall(r'\d+', strategy)
 
-SMA FORMAT:
+        if len(numbers) >= 2:
 
-{{
-    "strategy_type":"SMA"
-}}
-"""
+            buy_value = int(numbers[0])
 
-    try:
+            sell_value = int(numbers[1])
 
-        response = model.generate_content(prompt)
+        else:
 
-        content = response.text
+            buy_value = 30
 
-        content = content.replace(
-            "```json",
-            ""
-        )
-
-        content = content.replace(
-            "```",
-            ""
-        )
-
-        return json.loads(content)
-
-    except:
+            sell_value = 70
 
         return {
+
             "strategy_type":"RSI",
-            "buy_value":30,
-            "sell_value":70
+
+            "buy_value": buy_value,
+
+            "sell_value": sell_value
         }
+
+    # =============================================
+    # SMA DETECTION
+    # =============================================
+
+    elif "sma" in strategy:
+
+        return {
+
+            "strategy_type":"SMA"
+        }
+
+    # =============================================
+    # DEFAULT
+    # =============================================
+
+    return {
+
+        "strategy_type":"RSI",
+
+        "buy_value":45,
+
+        "sell_value":55
+    }
 
 # =========================================================
 # AI EXPLANATION
