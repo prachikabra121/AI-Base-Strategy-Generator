@@ -1,6 +1,6 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FINAL STABLE PRODUCTION VERSION
+# FINAL ENTERPRISE VERSION
 # =========================================================
 #
 # FEATURES:
@@ -18,7 +18,8 @@
 # ✅ Vibe Coding Experience
 # ✅ Stocks / Crypto / ETFs / Indexes
 # ✅ Stable Yahoo Finance Loader
-# ✅ Rate Limit Handling
+# ✅ Recent Signal Detection
+# ✅ Better Webinar Demo Experience
 #
 # =========================================================
 #
@@ -47,6 +48,7 @@ import numpy as np
 import json
 from datetime import datetime
 import time
+import re
 
 # =========================================================
 # PAGE CONFIG
@@ -95,6 +97,7 @@ Build AI-powered trading systems using:
 ✅ Quantitative Finance  
 ✅ Professional Backtesting  
 ✅ Smart Alerts  
+✅ Multi-Strategy Intelligence  
 """)
 
 # =========================================================
@@ -105,7 +108,7 @@ st.sidebar.title("⚙ Trading Settings")
 
 ticker = st.sidebar.text_input(
     "Enter Ticker",
-    value="AAPL"
+    value="BTC-USD"
 ).strip().upper()
 
 period = st.sidebar.selectbox(
@@ -117,7 +120,7 @@ period = st.sidebar.selectbox(
         "5y",
         "10y"
     ],
-    index=4
+    index=0
 )
 
 risk_appetite = st.sidebar.selectbox(
@@ -198,12 +201,12 @@ if strategy_mode == "Manual Strategy":
         placeholder="""
 Examples:
 
-Buy when RSI is below 30
-and sell when RSI is above 70
+Buy when RSI is below 45
+and sell when RSI is above 55
 
 Buy when 20 SMA crosses above 50 SMA
 
-Buy when trend becomes bullish
+Create aggressive crypto strategy
 """
     )
 
@@ -219,13 +222,13 @@ else:
         placeholder="""
 Examples:
 
-Create bullish strategy for trending market
+Create bullish strategy for crypto
+
+Create aggressive momentum strategy
 
 Create low-risk swing trading strategy
 
-Create momentum strategy for crypto
-
-Create breakout strategy for volatile stocks
+Create breakout strategy
 """
     )
 
@@ -283,34 +286,33 @@ Supported:
     except:
 
         return {
+
             "strategy_name":"Fallback Strategy",
-            "strategy_type":"SMA",
-            "entry":"20 SMA crosses above 50 SMA",
-            "exit":"20 SMA crosses below 50 SMA",
+
+            "strategy_type":"RSI",
+
+            "entry":"Buy when RSI is below 45",
+
+            "exit":"Sell when RSI is above 55",
+
             "stop_loss":"5%",
+
             "take_profit":"10%",
+
             "risk_level":"Medium"
         }
 
 # =========================================================
-# AI STRATEGY PARSER
-# =========================================================
-
-# =========================================================
-# AI STRATEGY PARSER
+# STRATEGY PARSER
 # =========================================================
 
 def parse_strategy(strategy):
 
     strategy = strategy.lower()
 
-    # =============================================
-    # RSI DETECTION
-    # =============================================
+    # RSI
 
     if "rsi" in strategy:
-
-        import re
 
         numbers = re.findall(r'\d+', strategy)
 
@@ -322,9 +324,9 @@ def parse_strategy(strategy):
 
         else:
 
-            buy_value = 30
+            buy_value = 45
 
-            sell_value = 70
+            sell_value = 55
 
         return {
 
@@ -335,9 +337,7 @@ def parse_strategy(strategy):
             "sell_value": sell_value
         }
 
-    # =============================================
-    # SMA DETECTION
-    # =============================================
+    # SMA
 
     elif "sma" in strategy:
 
@@ -346,9 +346,7 @@ def parse_strategy(strategy):
             "strategy_type":"SMA"
         }
 
-    # =============================================
     # DEFAULT
-    # =============================================
 
     return {
 
@@ -372,8 +370,8 @@ Explain this trading strategy:
 
 Include:
 - logic
-- risk
-- market conditions
+- risks
+- best market conditions
 - best usage
 """
 
@@ -388,7 +386,7 @@ Include:
         return "AI explanation unavailable."
 
 # =========================================================
-# LOAD DATA (FINAL STABLE VERSION)
+# LOAD DATA
 # =========================================================
 
 @st.cache_data(ttl=3600)
@@ -399,11 +397,7 @@ def load_data(symbol, period):
 
     try:
 
-        # SMALL DELAY
-
         time.sleep(1)
-
-        # DOWNLOAD DATA
 
         df = yf.download(
             tickers=symbol,
@@ -415,11 +409,10 @@ def load_data(symbol, period):
             group_by='column'
         )
 
-        # DEBUG
-
-        st.write("Downloaded Rows:", len(df))
-
-        # VALIDATION
+        st.write(
+            "Downloaded Rows:",
+            len(df)
+        )
 
         if df.empty:
 
@@ -429,8 +422,6 @@ def load_data(symbol, period):
 
             st.stop()
 
-        # FIX MULTIINDEX
-
         if isinstance(
             df.columns,
             pd.MultiIndex
@@ -438,11 +429,7 @@ def load_data(symbol, period):
 
             df.columns = df.columns.droplevel(1)
 
-        # CLEAN DATA
-
         df = df.dropna()
-
-        # REQUIRED COLUMNS
 
         required_cols = [
             'Open',
@@ -453,7 +440,9 @@ def load_data(symbol, period):
         ]
 
         missing_cols = [
+
             col for col in required_cols
+
             if col not in df.columns
         ]
 
@@ -462,8 +451,6 @@ def load_data(symbol, period):
             st.error(
                 f"Missing columns: {missing_cols}"
             )
-
-            st.write(df.head())
 
             st.stop()
 
@@ -478,16 +465,16 @@ def load_data(symbol, period):
         st.info("""
 Yahoo Finance temporarily rate-limited requests.
 
-Solutions:
+Try:
 1. Wait 1 minute
-2. Restart Streamlit app
+2. Restart app
 3. Change ticker
 """)
 
         st.stop()
 
 # =========================================================
-# STRATEGY RECOMMENDATION ENGINE
+# RECOMMENDATION ENGINE
 # =========================================================
 
 def recommend_strategy(df):
@@ -518,7 +505,7 @@ def recommend_strategy(df):
         explanation = """
 📈 Trending Market Detected
 
-✅ Recommended Strategy:
+✅ Recommended:
 SMA Trend Following
 """
 
@@ -529,7 +516,7 @@ SMA Trend Following
         explanation = """
 📉 Sideways Market Detected
 
-✅ Recommended Strategy:
+✅ Recommended:
 RSI Mean Reversion
 """
 
@@ -743,8 +730,8 @@ def compare_strategies(df):
 
     rsi_df = run_rsi_strategy(
         rsi_df,
-        30,
-        70
+        45,
+        55
     )
 
     (
@@ -765,8 +752,11 @@ def compare_strategies(df):
     )
 
     results.append({
+
         "Strategy":"RSI",
+
         "Return %":round(rsi_return, 2),
+
         "Sharpe":round(rsi_sharpe, 2)
     })
 
@@ -796,8 +786,11 @@ def compare_strategies(df):
     )
 
     results.append({
+
         "Strategy":"SMA",
+
         "Return %":round(sma_return, 2),
+
         "Sharpe":round(sma_sharpe, 2)
     })
 
@@ -862,7 +855,9 @@ def plot_chart(df, ticker):
 
 if st.button("🚀 Generate AI Strategy"):
 
+    # =====================================================
     # AI GENERATED STRATEGY
+    # =====================================================
 
     if strategy_mode == "AI Generate Strategy":
 
@@ -908,7 +903,9 @@ if st.button("🚀 Generate AI Strategy"):
 
         st.json(strategy_json)
 
+    # =====================================================
     # LOAD DATA
+    # =====================================================
 
     data = load_data(
         ticker,
@@ -924,7 +921,9 @@ if st.button("🚀 Generate AI Strategy"):
         f"${latest_price:,.2f}"
     )
 
-    # STRATEGY RECOMMENDATION
+    # =====================================================
+    # RECOMMENDATION ENGINE
+    # =====================================================
 
     (
         recommended_strategy,
@@ -938,7 +937,9 @@ if st.button("🚀 Generate AI Strategy"):
 
     st.info(recommendation_text)
 
+    # =====================================================
     # APPLY STRATEGY
+    # =====================================================
 
     strategy_type = strategy_json[
         'strategy_type'
@@ -950,11 +951,11 @@ if st.button("🚀 Generate AI Strategy"):
             data,
             strategy_json.get(
                 'buy_value',
-                30
+                45
             ),
             strategy_json.get(
                 'sell_value',
-                70
+                55
             )
         )
 
@@ -962,7 +963,9 @@ if st.button("🚀 Generate AI Strategy"):
 
         data = run_sma_strategy(data)
 
+    # =====================================================
     # BACKTEST
+    # =====================================================
 
     (
         data,
@@ -970,7 +973,9 @@ if st.button("🚀 Generate AI Strategy"):
         strategy_curve
     ) = backtest(data)
 
+    # =====================================================
     # METRICS
+    # =====================================================
 
     (
         strategy_return,
@@ -1009,7 +1014,9 @@ if st.button("🚀 Generate AI Strategy"):
         f"{sharpe:.2f}"
     )
 
+    # =====================================================
     # STRATEGY COMPARISON
+    # =====================================================
 
     st.subheader(
         "⚔ Multi-Strategy Comparison"
@@ -1034,7 +1041,9 @@ if st.button("🚀 Generate AI Strategy"):
 {best_strategy['Strategy']}
 """)
 
+    # =====================================================
     # AI CONFIDENCE
+    # =====================================================
 
     confidence = min(
         max(
@@ -1054,73 +1063,121 @@ if st.button("🚀 Generate AI Strategy"):
         f"AI Confidence Score: {confidence}%"
     )
 
-    # SMART ALERTS
+    # =====================================================
+    # SMART ALERT SYSTEM
+    # =====================================================
 
     st.subheader(
         "🚨 Smart Trading Alerts"
     )
 
-    latest_signal = data[
-        'Signal'
-    ].iloc[-1]
+    recent_data = data.tail(30)
+
+    buy_signals = recent_data[
+        recent_data['Signal'] == 1
+    ]
+
+    sell_signals = recent_data[
+        recent_data['Signal'] == -1
+    ]
 
     current_time = datetime.now().strftime(
         "%Y-%m-%d %H:%M:%S"
     )
 
-    if latest_signal == 1:
+    # BUY SIGNAL
+
+    if len(buy_signals) > 0:
+
+        latest_buy = buy_signals.iloc[-1]
+
+        signal_price = latest_buy['Close']
 
         st.toast(
-            f"🚀 BUY SIGNAL GENERATED for {ticker}"
+            f"🚀 BUY SIGNAL DETECTED for {ticker}"
         )
 
         st.balloons()
 
         st.success(
-            f"🚀 STRONG BUY SIGNAL DETECTED for {ticker}"
+            f"🚀 BUY SIGNAL DETECTED for {ticker}"
         )
+
+        st.info(f"""
+Signal Price:
+${signal_price:.2f}
+
+AI Confidence:
+{confidence}%
+""")
 
         st.session_state.alert_history.append({
 
             "Time": current_time,
+
             "Ticker": ticker,
+
             "Signal": "BUY",
+
             "Price": round(
-                latest_price,
+                signal_price,
                 2
             ),
+
             "Confidence": confidence
         })
 
-    elif latest_signal == -1:
+    # SELL SIGNAL
+
+    elif len(sell_signals) > 0:
+
+        latest_sell = sell_signals.iloc[-1]
+
+        signal_price = latest_sell['Close']
 
         st.toast(
-            f"🔴 SELL SIGNAL GENERATED for {ticker}"
+            f"🔴 SELL SIGNAL DETECTED for {ticker}"
         )
 
         st.error(
-            f"🔴 STRONG SELL SIGNAL DETECTED for {ticker}"
+            f"🔴 SELL SIGNAL DETECTED for {ticker}"
         )
+
+        st.warning(f"""
+Signal Price:
+${signal_price:.2f}
+
+AI Confidence:
+{confidence}%
+""")
 
         st.session_state.alert_history.append({
 
             "Time": current_time,
+
             "Ticker": ticker,
+
             "Signal": "SELL",
+
             "Price": round(
-                latest_price,
+                signal_price,
                 2
             ),
+
             "Confidence": confidence
         })
+
+    # NO SIGNAL
 
     else:
 
         st.warning(
-            "⚪ HOLD / NO ACTIVE SIGNAL"
+            "⚪ HOLD / NO RECENT SIGNALS"
         )
 
+    # =====================================================
     # ALERT HISTORY
+    # =====================================================
 
     st.subheader(
         "📋 Alert History"
@@ -1145,7 +1202,9 @@ if st.button("🚀 Generate AI Strategy"):
             "No alerts generated yet."
         )
 
+    # =====================================================
     # CHARTS
+    # =====================================================
 
     st.subheader(
         "📈 Trading Signals"
@@ -1153,7 +1212,9 @@ if st.button("🚀 Generate AI Strategy"):
 
     plot_chart(data, ticker)
 
+    # =====================================================
     # AI EXPLANATION
+    # =====================================================
 
     st.subheader(
         "🤖 AI Strategy Explanation"
@@ -1165,7 +1226,9 @@ if st.button("🚀 Generate AI Strategy"):
 
     st.write(explanation)
 
+    # =====================================================
     # MARKET DATA
+    # =====================================================
 
     st.subheader(
         "📋 Market Data"
@@ -1175,7 +1238,9 @@ if st.button("🚀 Generate AI Strategy"):
         data.tail(20)
     )
 
+    # =====================================================
     # FINAL SUMMARY
+    # =====================================================
 
     st.subheader(
         "🚀 AI Trading Summary"
