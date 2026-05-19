@@ -1,6 +1,6 @@
 # =========================================================
 # AI QUANT TRADING PLATFORM
-# FULL INSTITUTIONAL VERSION
+# FULL SMART ALERT + AI AGENT VERSION
 # =========================================================
 #
 # FEATURES:
@@ -8,6 +8,8 @@
 # ✅ AI Strategy Generator
 # ✅ AI Strategy Recommendation Engine
 # ✅ Multi-Strategy Comparison
+# ✅ Smart Trading Alerts
+# ✅ Alert History
 # ✅ AI Strategy Explanation
 # ✅ RSI Strategy
 # ✅ SMA Strategy
@@ -41,6 +43,7 @@ from ta.trend import SMAIndicator
 import google.generativeai as genai
 import numpy as np
 import json
+from datetime import datetime
 
 # =========================================================
 # PAGE CONFIG
@@ -67,6 +70,14 @@ model = genai.GenerativeModel(
 )
 
 # =========================================================
+# SESSION STATE
+# =========================================================
+
+if "alert_history" not in st.session_state:
+
+    st.session_state.alert_history = []
+
+# =========================================================
 # TITLE
 # =========================================================
 
@@ -80,6 +91,7 @@ Build AI-powered trading systems using:
 ✅ AI Agents  
 ✅ Quantitative Finance  
 ✅ Professional Backtesting  
+✅ Smart Alerts  
 """)
 
 # =========================================================
@@ -576,12 +588,10 @@ def backtest(df):
 
     transaction_cost = 0.001
 
-    # RETURNS
     df['Returns'] = (
         df['Close'].pct_change()
     )
 
-    # POSITION
     df['Position'] = df['Signal']
 
     df['Position'] = (
@@ -591,14 +601,12 @@ def backtest(df):
         .fillna(0)
     )
 
-    # STRATEGY RETURNS
     df['Strategy_Returns'] = (
         df['Returns']
         *
         df['Position'].shift(1)
     )
 
-    # COST
     df['Strategy_Returns'] = (
         df['Strategy_Returns']
         -
@@ -614,7 +622,6 @@ def backtest(df):
         .fillna(0)
     )
 
-    # EQUITY CURVES
     market_curve = (
         1 + df['Returns']
     ).cumprod()
@@ -711,10 +718,7 @@ def compare_strategies(df, period):
 
     comparison_results = []
 
-    # =====================================================
     # RSI STRATEGY
-    # =====================================================
-
     rsi_df = df.copy()
 
     rsi_df = run_rsi_strategy(
@@ -751,10 +755,7 @@ def compare_strategies(df, period):
         "Drawdown %":round(rsi_drawdown, 2)
     })
 
-    # =====================================================
     # SMA STRATEGY
-    # =====================================================
-
     sma_df = df.copy()
 
     sma_df = run_sma_strategy(
@@ -918,10 +919,6 @@ if st.button("🚀 Generate AI Strategy"):
         strategy_json = parse_strategy(
             strategy_text
         )
-
-    # =====================================================
-    # MANUAL STRATEGY
-    # =====================================================
 
     else:
 
@@ -1156,47 +1153,130 @@ Sharpe Ratio:
     )
 
     # =====================================================
-    # TREND ANALYSIS
+    # SMART ALERT SYSTEM
     # =====================================================
 
-    if latest_price > data[
-        'Close'
-    ].mean():
-
-        st.success(
-            "📈 Bullish Trend Detected"
-        )
-
-    else:
-
-        st.error(
-            "📉 Bearish Trend Detected"
-        )
-
-    # =====================================================
-    # SIGNAL
-    # =====================================================
+    st.subheader(
+        "🚨 Smart Trading Alerts"
+    )
 
     latest_signal = data[
         'Signal'
     ].iloc[-1]
 
+    current_time = datetime.now().strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    # BUY SIGNAL
     if latest_signal == 1:
 
-        st.success(
-            "🚀 BUY SIGNAL GENERATED"
+        st.toast(
+            f"🚀 BUY SIGNAL GENERATED for {ticker}"
         )
 
+        st.balloons()
+
+        st.success(
+            f"🚀 STRONG BUY SIGNAL DETECTED for {ticker}"
+        )
+
+        st.info(f"""
+Entry Price:
+${latest_price:.2f}
+
+AI Confidence:
+{confidence}%
+
+Market Type:
+{market_type}
+""")
+
+        st.session_state.alert_history.append({
+
+            "Time": current_time,
+
+            "Ticker": ticker,
+
+            "Signal": "BUY",
+
+            "Price": round(
+                latest_price,
+                2
+            ),
+
+            "Confidence": confidence
+        })
+
+    # SELL SIGNAL
     elif latest_signal == -1:
 
-        st.error(
-            "🔴 SELL SIGNAL GENERATED"
+        st.toast(
+            f"🔴 SELL SIGNAL GENERATED for {ticker}"
         )
+
+        st.error(
+            f"🔴 STRONG SELL SIGNAL DETECTED for {ticker}"
+        )
+
+        st.warning(f"""
+Exit Price:
+${latest_price:.2f}
+
+AI Confidence:
+{confidence}%
+
+Market Type:
+{market_type}
+""")
+
+        st.session_state.alert_history.append({
+
+            "Time": current_time,
+
+            "Ticker": ticker,
+
+            "Signal": "SELL",
+
+            "Price": round(
+                latest_price,
+                2
+            ),
+
+            "Confidence": confidence
+        })
 
     else:
 
         st.warning(
             "⚪ HOLD / NO ACTIVE SIGNAL"
+        )
+
+    # =====================================================
+    # ALERT HISTORY
+    # =====================================================
+
+    st.subheader(
+        "📋 Alert History"
+    )
+
+    if len(
+        st.session_state.alert_history
+    ) > 0:
+
+        alert_df = pd.DataFrame(
+            st.session_state.alert_history
+        )
+
+        st.dataframe(
+            alert_df,
+            use_container_width=True
+        )
+
+    else:
+
+        st.info(
+            "No alerts generated yet."
         )
 
     # =====================================================
