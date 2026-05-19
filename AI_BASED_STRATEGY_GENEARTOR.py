@@ -1,0 +1,833 @@
+# =========================================================
+# AI QUANT TRADING PLATFORM
+# FULL ADVANCED VERSION
+# =========================================================
+#
+# INSTALL:
+#
+# pip install streamlit yfinance pandas ta plotly google-generativeai
+#
+# RUN:
+#
+# python -m streamlit run main.py
+#
+# =========================================================
+
+
+# =========================================================
+# IMPORTS
+# =========================================================
+
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import plotly.graph_objects as go
+from ta.momentum import RSIIndicator
+from ta.trend import SMAIndicator
+import google.generativeai as genai
+import json
+import numpy as np
+
+# =========================================================
+# GEMINI CONFIG
+# =========================================================
+
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+
+genai.configure(api_key=GEMINI_API_KEY)
+
+model = genai.GenerativeModel(
+    "gemini-2.5-flash"
+)
+
+# =========================================================
+# PAGE CONFIG
+# =========================================================
+
+st.set_page_config(
+    page_title="AI Quant Trading Platform",
+    page_icon="🚀",
+    layout="wide"
+)
+
+# =========================================================
+# TITLE
+# =========================================================
+
+st.title("🚀 AI Quant Trading Platform")
+
+st.write("""
+Build intelligent AI-powered trading strategies
+using plain English prompts.
+
+Supports:
+✅ Stocks
+✅ Crypto
+✅ ETFs
+✅ Indexes
+✅ AI Explanations
+✅ Risk Analytics
+✅ Backtesting
+""")
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+
+st.sidebar.title("⚙ Platform Settings")
+
+ticker = st.sidebar.text_input(
+    "Enter Any Stock / Crypto / ETF / Index",
+    value="AAPL"
+)
+
+period = st.sidebar.selectbox(
+    "Select Time Period",
+    [
+        "6mo",
+        "1y",
+        "2y",
+        "5y",
+        "10y"
+    ],
+    index=4
+)
+
+initial_capital = st.sidebar.number_input(
+    "Initial Capital",
+    value=100000
+)
+
+risk_appetite = st.sidebar.selectbox(
+    "Risk Appetite",
+    [
+        "Low",
+        "Medium",
+        "High"
+    ]
+)
+
+st.sidebar.info("""
+Examples:
+
+Stocks:
+AAPL
+TSLA
+NVDA
+
+Indian Stocks:
+RELIANCE.NS
+
+Crypto:
+BTC-USD
+
+Indexes:
+^NSEI
+""")
+
+# =========================================================
+# MARKET TYPE DETECTION
+# =========================================================
+
+if "-USD" in ticker:
+
+    market_type = "Crypto"
+
+elif ".NS" in ticker:
+
+    market_type = "Indian Stock"
+
+elif "^" in ticker:
+
+    market_type = "Index"
+
+else:
+
+    market_type = "US Stock"
+
+st.sidebar.success(
+    f"Detected Market: {market_type}"
+)
+
+# =========================================================
+# STRATEGY INPUT
+# =========================================================
+
+strategy_text = st.text_area(
+    "Describe Your Trading Strategy",
+    height=180,
+    placeholder="""
+Examples:
+
+Buy when RSI is below 30
+and sell when RSI is above 70
+
+Buy when 20 SMA crosses above 50 SMA
+
+Buy when trend becomes bullish
+"""
+)
+
+
+# =========================================================
+# AI STRATEGY PARSER
+# =========================================================
+
+def parse_strategy(strategy):
+    prompt = f"""
+You are an AI quant trading assistant.
+
+Analyze this strategy:
+
+{strategy}
+
+Supported:
+1. RSI
+2. SMA
+
+Return ONLY valid JSON.
+
+RSI FORMAT:
+
+{{
+    "strategy_type":"RSI",
+    "buy_condition":"RSI < 30",
+    "sell_condition":"RSI > 70",
+    "buy_value":30,
+    "sell_value":70
+}}
+
+SMA FORMAT:
+
+{{
+    "strategy_type":"SMA"
+}}
+"""
+
+    response = model.generate_content(prompt)
+
+    content = response.text
+
+    content = content.replace(
+        "```json",
+        ""
+    )
+
+    content = content.replace(
+        "```",
+        ""
+    )
+
+    try:
+
+        return json.loads(content)
+
+    except:
+
+        return {
+            "strategy_type": "RSI",
+            "buy_value": 30,
+            "sell_value": 70
+        }
+
+
+# =========================================================
+# AI STRATEGY EXPLANATION
+# =========================================================
+
+def explain_strategy(strategy):
+    prompt = f"""
+Explain this trading strategy in simple terms:
+
+{strategy}
+
+Include:
+- logic
+- market conditions
+- risk
+- best usage
+"""
+
+    response = model.generate_content(prompt)
+
+    return response.text
+
+
+# =========================================================
+# LOAD DATA
+# =========================================================
+
+def load_data(symbol, period):
+    try:
+
+        df = yf.download(
+            symbol,
+            period=period,
+            auto_adjust=True
+        )
+
+        if df.empty:
+            st.error(
+                "Invalid ticker or no data."
+            )
+
+            st.stop()
+
+        if isinstance(
+                df.columns,
+                pd.MultiIndex
+        ):
+            df.columns = (
+                df.columns.droplevel(1)
+            )
+
+        return df
+
+    except Exception as e:
+
+        st.error(e)
+
+        st.stop()
+
+
+# =========================================================
+# RSI STRATEGY
+# =========================================================
+
+def run_rsi_strategy(
+        df,
+        buy_value,
+        sell_value
+):
+    rsi = RSIIndicator(df['Close'])
+
+    df['RSI'] = rsi.rsi()
+
+    df['Signal'] = 0
+
+    df.loc[
+        df['RSI'] < buy_value,
+        'Signal'
+    ] = 1
+
+    df.loc[
+        df['RSI'] > sell_value,
+        'Signal'
+    ] = -1
+
+    return df
+
+
+# =========================================================
+# SMA STRATEGY
+# =========================================================
+
+def run_sma_strategy(df):
+    sma20 = SMAIndicator(
+        df['Close'],
+        window=20
+    )
+
+    sma50 = SMAIndicator(
+        df['Close'],
+        window=50
+    )
+
+    df['SMA20'] = (
+        sma20.sma_indicator()
+    )
+
+    df['SMA50'] = (
+        sma50.sma_indicator()
+    )
+
+    df['Signal'] = 0
+
+    df.loc[
+        df['SMA20'] > df['SMA50'],
+        'Signal'
+    ] = 1
+
+    df.loc[
+        df['SMA20'] < df['SMA50'],
+        'Signal'
+    ] = -1
+
+    return df
+
+
+# =========================================================
+# BACKTEST
+# =========================================================
+
+def backtest(df):
+    df['Returns'] = (
+        df['Close'].pct_change()
+    )
+
+    df['Strategy_Returns'] = (
+            df['Returns'] *
+            df['Signal'].shift(1)
+    )
+
+    market_curve = (
+            1 + df['Returns']
+    ).cumprod()
+
+    strategy_curve = (
+            1 + df['Strategy_Returns']
+    ).cumprod()
+
+    return (
+        df,
+        market_curve,
+        strategy_curve
+    )
+
+
+# =========================================================
+# PERFORMANCE METRICS
+# =========================================================
+
+def calculate_metrics(
+        strategy_curve,
+        market_curve,
+        df,
+        period
+):
+    strategy_return = (
+            (strategy_curve.iloc[-1] - 1)
+            * 100
+    )
+
+    market_return = (
+            (market_curve.iloc[-1] - 1)
+            * 100
+    )
+
+    years_map = {
+        "6mo": 0.5,
+        "1y": 1,
+        "2y": 2,
+        "5y": 5,
+        "10y": 10
+    }
+
+    years = years_map[period]
+
+    cagr = (
+                   (
+                       strategy_curve.iloc[-1]
+                   ) ** (1 / years) - 1
+           ) * 100
+
+    rolling_max = (
+        strategy_curve.cummax()
+    )
+
+    drawdown = (
+                       strategy_curve -
+                       rolling_max
+               ) / rolling_max
+
+    max_drawdown = (
+            drawdown.min() * 100
+    )
+
+    volatility = (
+                         df['Returns'].std() *
+                         np.sqrt(252)
+                 ) * 100
+
+    sharpe = (
+                     df['Strategy_Returns'].mean() /
+                     df['Strategy_Returns'].std()
+             ) * np.sqrt(252)
+
+    return (
+        strategy_return,
+        market_return,
+        cagr,
+        max_drawdown,
+        volatility,
+        sharpe
+    )
+
+
+# =========================================================
+# PRICE CHART
+# =========================================================
+
+def plot_chart(df, ticker):
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df['Close'],
+            mode='lines',
+            name='Price'
+        )
+    )
+
+    buy_signals = df[
+        df['Signal'] == 1
+        ]
+
+    fig.add_trace(
+        go.Scatter(
+            x=buy_signals.index,
+            y=buy_signals['Close'],
+            mode='markers',
+            name='BUY'
+        )
+    )
+
+    sell_signals = df[
+        df['Signal'] == -1
+        ]
+
+    fig.add_trace(
+        go.Scatter(
+            x=sell_signals.index,
+            y=sell_signals['Close'],
+            mode='markers',
+            name='SELL'
+        )
+    )
+
+    fig.update_layout(
+        title=f"{ticker} Trading Signals",
+        height=600
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+
+# =========================================================
+# EQUITY CURVE
+# =========================================================
+
+def plot_equity_curve(
+        market_curve,
+        strategy_curve
+):
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            y=market_curve,
+            mode='lines',
+            name='Market'
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            y=strategy_curve,
+            mode='lines',
+            name='Strategy'
+        )
+    )
+
+    fig.update_layout(
+        title="Strategy vs Market",
+        height=500
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+
+# =========================================================
+# MAIN EXECUTION
+# =========================================================
+
+if st.button("🚀 Generate AI Strategy"):
+
+    if strategy_text.strip() == "":
+        st.warning(
+            "Please enter strategy."
+        )
+
+        st.stop()
+
+    # -------------------------------------
+    # AI ANALYSIS
+    # -------------------------------------
+
+    with st.spinner(
+            "AI is generating strategy..."
+    ):
+
+        strategy_json = parse_strategy(
+            strategy_text
+        )
+
+    st.subheader(
+        "🤖 AI Strategy Analysis"
+    )
+
+    st.json(strategy_json)
+
+    # -------------------------------------
+    # LOAD DATA
+    # -------------------------------------
+
+    data = load_data(
+        ticker,
+        period
+    )
+
+    # -------------------------------------
+    # APPLY STRATEGY
+    # -------------------------------------
+
+    strategy_type = strategy_json[
+        'strategy_type'
+    ]
+
+    if strategy_type.upper() == "RSI":
+
+        data = run_rsi_strategy(
+            data,
+            strategy_json['buy_value'],
+            strategy_json['sell_value']
+        )
+
+    else:
+
+        data = run_sma_strategy(data)
+
+    # -------------------------------------
+    # BACKTEST
+    # -------------------------------------
+
+    (
+        data,
+        market_curve,
+        strategy_curve
+    ) = backtest(data)
+
+    # -------------------------------------
+    # METRICS
+    # -------------------------------------
+
+    (
+        strategy_return,
+        market_return,
+        cagr,
+        max_drawdown,
+        volatility,
+        sharpe
+    ) = calculate_metrics(
+        strategy_curve,
+        market_curve,
+        data,
+        period
+    )
+
+    # -------------------------------------
+    # CURRENT PRICE
+    # -------------------------------------
+
+    latest_price = data[
+        'Close'
+    ].iloc[-1]
+
+    st.metric(
+        "Current Price",
+        f"${latest_price:,.2f}"
+    )
+
+    # -------------------------------------
+    # PERFORMANCE
+    # -------------------------------------
+
+    st.subheader("📊 Performance Metrics")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric(
+        "Strategy Return",
+        f"{strategy_return:.2f}%"
+    )
+
+    col2.metric(
+        "Market Return",
+        f"{market_return:.2f}%"
+    )
+
+    col3.metric(
+        "CAGR",
+        f"{cagr:.2f}%"
+    )
+
+    col4, col5, col6 = st.columns(3)
+
+    col4.metric(
+        "Max Drawdown",
+        f"{max_drawdown:.2f}%"
+    )
+
+    col5.metric(
+        "Volatility",
+        f"{volatility:.2f}%"
+    )
+
+    col6.metric(
+        "Sharpe Ratio",
+        f"{sharpe:.2f}"
+    )
+
+    # -------------------------------------
+    # AI RISK ANALYSIS
+    # -------------------------------------
+
+    st.subheader("🧠 AI Risk Analysis")
+
+    if sharpe > 1:
+
+        risk_level = "Low"
+
+    elif sharpe > 0.5:
+
+        risk_level = "Medium"
+
+    else:
+
+        risk_level = "High"
+
+    st.write(
+        f"AI Risk Assessment: {risk_level}"
+    )
+
+    confidence = min(
+        max(
+            int(sharpe * 50),
+            40
+        ),
+        95
+    )
+
+    st.progress(confidence)
+
+    st.write(
+        f"AI Confidence Score: {confidence}%"
+    )
+
+    # -------------------------------------
+    # TREND
+    # -------------------------------------
+
+    if latest_price > data[
+        'Close'
+    ].mean():
+
+        st.success(
+            "📈 Bullish Trend Detected"
+        )
+
+    else:
+
+        st.error(
+            "📉 Bearish Trend Detected"
+        )
+
+    # -------------------------------------
+    # SIGNAL
+    # -------------------------------------
+
+    latest_signal = data[
+        'Signal'
+    ].iloc[-1]
+
+    if latest_signal == 1:
+
+        st.success(
+            "🚀 BUY SIGNAL GENERATED"
+        )
+
+    elif latest_signal == -1:
+
+        st.error(
+            "🔴 SELL SIGNAL GENERATED"
+        )
+
+    # -------------------------------------
+    # PRICE CHART
+    # -------------------------------------
+
+    st.subheader(
+        "📈 Trading Signals"
+    )
+
+    plot_chart(data, ticker)
+
+    # -------------------------------------
+    # EQUITY CURVE
+    # -------------------------------------
+
+    st.subheader(
+        "📊 Equity Curve"
+    )
+
+    plot_equity_curve(
+        market_curve,
+        strategy_curve
+    )
+
+    # -------------------------------------
+    # AI EXPLANATION
+    # -------------------------------------
+
+    st.subheader(
+        "🤖 AI Strategy Explanation"
+    )
+
+    explanation = explain_strategy(
+        strategy_text
+    )
+
+    st.write(explanation)
+
+    # -------------------------------------
+    # DATA PREVIEW
+    # -------------------------------------
+
+    st.subheader(
+        "📋 Market Data"
+    )
+
+    st.dataframe(
+        data.tail(20)
+    )
+
+    # -------------------------------------
+    # FINAL SUMMARY
+    # -------------------------------------
+
+    st.subheader(
+        "🚀 AI Trading Summary"
+    )
+
+    st.write(f"""
+✅ Asset: {ticker}
+
+✅ Market Type: {market_type}
+
+✅ Strategy Type: {strategy_type}
+
+✅ Risk Appetite: {risk_appetite}
+
+✅ Historical Period Tested: {period}
+
+This demonstrates how AI can assist traders
+in generating intelligent quantitative trading
+systems using plain English prompts.
+""")
