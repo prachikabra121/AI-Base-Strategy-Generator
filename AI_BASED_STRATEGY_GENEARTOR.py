@@ -655,15 +655,18 @@ Error:
 # TELEGRAM ALERT FUNCTION
 # =========================================================
 
+d# =========================================================
+# TELEGRAM ALERT FUNCTION
+# =========================================================
+
 def send_telegram_alert(message):
 
     try:
 
-        url = f"""
-https://api.telegram.org/bot
-{TELEGRAM_BOT_TOKEN}
-/sendMessage
-"""
+        url = (
+            f"https://api.telegram.org/bot"
+            f"{TELEGRAM_BOT_TOKEN}/sendMessage"
+        )
 
         payload = {
 
@@ -677,12 +680,19 @@ https://api.telegram.org/bot
             data=payload
         )
 
+        # DEBUG RESPONSE
+
+        st.write(
+            "Telegram Response:",
+            response.json()
+        )
+
         return response.json()
 
     except Exception as e:
 
-        st.warning(
-            f"Telegram alert failed: {e}"
+        st.error(
+            f"Telegram Error: {e}"
         )
 # =========================================================
 # LOAD DATA
@@ -1498,33 +1508,49 @@ def calculate_metrics(
 # MULTI STRATEGY COMPARISON
 # =========================================================
 
+# =========================================================
+# MULTI STRATEGY COMPARISON
+# =========================================================
+
 def compare_strategies(df):
 
     results = []
 
     # =====================================================
-    # STRATEGY LIST
+    # STRATEGY CONFIG
     # =====================================================
 
     strategies = {
 
         "RSI": lambda x: run_rsi_strategy(
-            x,
+            x.copy(),
             45,
             55
         ),
 
-        "SMA": run_sma_strategy,
+        "SMA": lambda x: run_sma_strategy(
+            x.copy()
+        ),
 
-        "EMA": run_ema_strategy,
+        "EMA": lambda x: run_ema_strategy(
+            x.copy()
+        ),
 
-        "MACD": run_macd_strategy,
+        "MACD": lambda x: run_macd_strategy(
+            x.copy()
+        ),
 
-        "BOLLINGER": run_bollinger_strategy,
+        "BOLLINGER": lambda x: run_bollinger_strategy(
+            x.copy()
+        ),
 
-        "MOMENTUM": run_momentum_strategy,
+        "MOMENTUM": lambda x: run_momentum_strategy(
+            x.copy()
+        ),
 
-        "BREAKOUT": run_breakout_strategy
+        "BREAKOUT": lambda x: run_breakout_strategy(
+            x.copy()
+        )
     }
 
     # =====================================================
@@ -1535,6 +1561,10 @@ def compare_strategies(df):
 
         try:
 
+            # =============================================
+            # COPY DATA
+            # =============================================
+
             temp_df = df.copy()
 
             # =============================================
@@ -1544,6 +1574,14 @@ def compare_strategies(df):
             temp_df = strategy_function(
                 temp_df
             )
+
+            # =============================================
+            # VALIDATE SIGNAL COLUMN
+            # =============================================
+
+            if 'Signal' not in temp_df.columns:
+
+                continue
 
             # =============================================
             # BACKTEST
@@ -1565,29 +1603,39 @@ def compare_strategies(df):
                 volatility,
                 sharpe
             ) = calculate_metrics(
+
                 strategy_curve,
+
                 market_curve,
+
                 temp_df
             )
 
             # =============================================
+            # CLEAN SHARPE
+            # =============================================
+
+            if np.isnan(sharpe):
+
+                sharpe = 0
+
+            # =============================================
             # WIN RATE
             # =============================================
+
+            trades_df = temp_df[
+                temp_df['Signal'] != 0
+            ]
+
+            total_trades = len(
+                trades_df
+            )
 
             winning_trades = len(
 
                 temp_df[
                     temp_df['Strategy_Returns'] > 0
                 ]
-
-            )
-
-            total_trades = len(
-
-                temp_df[
-                    temp_df['Signal'] != 0
-                ]
-
             )
 
             if total_trades > 0:
@@ -1603,7 +1651,7 @@ def compare_strategies(df):
                 win_rate = 0
 
             # =============================================
-            # APPEND RESULTS
+            # APPEND RESULT
             # =============================================
 
             results.append({
@@ -1625,11 +1673,17 @@ def compare_strategies(df):
                     2
                 ),
 
+                "Trades": total_trades,
+
                 "Win Rate %": round(
                     win_rate,
                     2
                 )
             })
+
+        # =============================================
+        # STRATEGY FAILURE
+        # =============================================
 
         except Exception as e:
 
@@ -1637,6 +1691,26 @@ def compare_strategies(df):
                 f"{strategy_name} failed: {e}"
             )
 
+    # =====================================================
+    # FINAL DATAFRAME
+    # =====================================================
+
+    comparison_df = pd.DataFrame(results)
+
+    # =============================================
+    # SORT
+    # =============================================
+
+    if not comparison_df.empty:
+
+        comparison_df = comparison_df.sort_values(
+
+            by="Sharpe",
+
+            ascending=False
+        )
+
+    return comparison_df
     # =====================================================
     # FINAL DATAFRAME
     # =====================================================
