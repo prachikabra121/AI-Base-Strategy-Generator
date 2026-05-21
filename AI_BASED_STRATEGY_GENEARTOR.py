@@ -41,7 +41,10 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-from ta.momentum import RSIIndicator
+from ta.momentum import (
+    RSIIndicator,
+    ROCIndicator
+)
 from ta.trend import (
     SMAIndicator,
     EMAIndicator,
