@@ -57,6 +57,7 @@ import json
 from datetime import datetime
 import time
 import re
+import requests
 
 # =========================================================
 # PAGE CONFIG
@@ -82,6 +83,17 @@ model = genai.GenerativeModel(
     "gemini-2.5-flash"
 )
 
+# =========================================================
+# TELEGRAM CONFIG
+# =========================================================
+
+TELEGRAM_BOT_TOKEN = st.secrets[
+    "TELEGRAM_BOT_TOKEN"
+]
+
+TELEGRAM_CHAT_ID = st.secrets[
+    "TELEGRAM_CHAT_ID"
+]
 # =========================================================
 # SESSION STATE
 # =========================================================
@@ -639,6 +651,39 @@ Error:
 {e}
 """
 
+# =========================================================
+# TELEGRAM ALERT FUNCTION
+# =========================================================
+
+def send_telegram_alert(message):
+
+    try:
+
+        url = f"""
+https://api.telegram.org/bot
+{TELEGRAM_BOT_TOKEN}
+/sendMessage
+"""
+
+        payload = {
+
+            "chat_id": TELEGRAM_CHAT_ID,
+
+            "text": message
+        }
+
+        response = requests.post(
+            url,
+            data=payload
+        )
+
+        return response.json()
+
+    except Exception as e:
+
+        st.warning(
+            f"Telegram alert failed: {e}"
+        )
 # =========================================================
 # LOAD DATA
 # =========================================================
@@ -1457,77 +1502,161 @@ def compare_strategies(df):
 
     results = []
 
-    # RSI
+    # =====================================================
+    # STRATEGY LIST
+    # =====================================================
 
-    rsi_df = df.copy()
+    strategies = {
 
-    rsi_df = run_rsi_strategy(
-        rsi_df,
-        45,
-        55
-    )
+        "RSI": lambda x: run_rsi_strategy(
+            x,
+            45,
+            55
+        ),
 
-    (
-        rsi_df,
-        rsi_market,
-        rsi_strategy
-    ) = backtest(rsi_df)
+        "SMA": run_sma_strategy,
 
-    (
-        rsi_return,
-        _,
-        _,
-        rsi_sharpe
-    ) = calculate_metrics(
-        rsi_strategy,
-        rsi_market,
-        rsi_df
-    )
+        "EMA": run_ema_strategy,
 
-    results.append({
+        "MACD": run_macd_strategy,
 
-        "Strategy":"RSI",
+        "BOLLINGER": run_bollinger_strategy,
 
-        "Return %":round(rsi_return, 2),
+        "MOMENTUM": run_momentum_strategy,
 
-        "Sharpe":round(rsi_sharpe, 2)
-    })
+        "BREAKOUT": run_breakout_strategy
+    }
 
-    # SMA
+    # =====================================================
+    # LOOP THROUGH STRATEGIES
+    # =====================================================
 
-    sma_df = df.copy()
+    for strategy_name, strategy_function in strategies.items():
 
-    sma_df = run_sma_strategy(
-        sma_df
-    )
+        try:
 
-    (
-        sma_df,
-        sma_market,
-        sma_strategy
-    ) = backtest(sma_df)
+            temp_df = df.copy()
 
-    (
-        sma_return,
-        _,
-        _,
-        sma_sharpe
-    ) = calculate_metrics(
-        sma_strategy,
-        sma_market,
-        sma_df
-    )
+            # =============================================
+            # APPLY STRATEGY
+            # =============================================
 
-    results.append({
+            temp_df = strategy_function(
+                temp_df
+            )
 
-        "Strategy":"SMA",
+            # =============================================
+            # BACKTEST
+            # =============================================
 
-        "Return %":round(sma_return, 2),
+            (
+                temp_df,
+                market_curve,
+                strategy_curve
+            ) = backtest(temp_df)
 
-        "Sharpe":round(sma_sharpe, 2)
-    })
+            # =============================================
+            # METRICS
+            # =============================================
 
-    return pd.DataFrame(results)
+            (
+                strategy_return,
+                market_return,
+                volatility,
+                sharpe
+            ) = calculate_metrics(
+                strategy_curve,
+                market_curve,
+                temp_df
+            )
+
+            # =============================================
+            # WIN RATE
+            # =============================================
+
+            winning_trades = len(
+
+                temp_df[
+                    temp_df['Strategy_Returns'] > 0
+                ]
+
+            )
+
+            total_trades = len(
+
+                temp_df[
+                    temp_df['Signal'] != 0
+                ]
+
+            )
+
+            if total_trades > 0:
+
+                win_rate = (
+                    winning_trades
+                    /
+                    total_trades
+                ) * 100
+
+            else:
+
+                win_rate = 0
+
+            # =============================================
+            # APPEND RESULTS
+            # =============================================
+
+            results.append({
+
+                "Strategy": strategy_name,
+
+                "Return %": round(
+                    strategy_return,
+                    2
+                ),
+
+                "Sharpe": round(
+                    sharpe,
+                    2
+                ),
+
+                "Volatility %": round(
+                    volatility,
+                    2
+                ),
+
+                "Win Rate %": round(
+                    win_rate,
+                    2
+                )
+            })
+
+        except Exception as e:
+
+            st.warning(
+                f"{strategy_name} failed: {e}"
+            )
+
+    # =====================================================
+    # FINAL DATAFRAME
+    # =====================================================
+
+    comparison_df = pd.DataFrame(results)
+
+    # =============================================
+    # SORT BEST FIRST
+    # =============================================
+
+    if not comparison_df.empty:
+
+        comparison_df = comparison_df.sort_values(
+
+            by="Sharpe",
+
+            ascending=False
+        )
+
+    return comparison_df
 
 # =========================================================
 # CHART
@@ -1864,11 +1993,19 @@ if st.button("🚀 Generate AI Strategy"):
 
     # BUY SIGNAL
 
+    # =============================================
+    # BUY SIGNAL
+    # =============================================
+
     if len(buy_signals) > 0:
 
         latest_buy = buy_signals.iloc[-1]
 
         signal_price = latest_buy['Close']
+
+        # =========================================
+        # STREAMLIT ALERTS
+        # =========================================
 
         st.toast(
             f"🚀 BUY SIGNAL DETECTED for {ticker}"
@@ -1881,12 +2018,42 @@ if st.button("🚀 Generate AI Strategy"):
         )
 
         st.info(f"""
-Signal Price:
-${signal_price:.2f}
+    Signal Price:
+    ${signal_price:.2f}
 
-AI Confidence:
-{confidence}%
-""")
+    Strategy:
+    {strategy_type}
+
+    AI Confidence:
+    {confidence}%
+    """)
+
+        # =========================================
+        # TELEGRAM MESSAGE
+        # =========================================
+
+        telegram_message = f"""
+    🚀 BUY SIGNAL DETECTED
+
+    Ticker: {ticker}
+
+    Price: ${signal_price:.2f}
+
+    Strategy: {strategy_type}
+
+    AI Confidence: {confidence}%
+
+    Generated By:
+    AI Quant Trading Platform
+    """
+
+        send_telegram_alert(
+            telegram_message
+        )
+
+        # =========================================
+        # ALERT HISTORY
+        # =========================================
 
         st.session_state.alert_history.append({
 
@@ -1896,6 +2063,8 @@ AI Confidence:
 
             "Signal": "BUY",
 
+            "Strategy": strategy_type,
+
             "Price": round(
                 signal_price,
                 2
@@ -1903,14 +2072,19 @@ AI Confidence:
 
             "Confidence": confidence
         })
-
+    # =============================================
     # SELL SIGNAL
+    # =============================================
 
     elif len(sell_signals) > 0:
 
         latest_sell = sell_signals.iloc[-1]
 
         signal_price = latest_sell['Close']
+
+        # =========================================
+        # STREAMLIT ALERTS
+        # =========================================
 
         st.toast(
             f"🔴 SELL SIGNAL DETECTED for {ticker}"
@@ -1921,12 +2095,42 @@ AI Confidence:
         )
 
         st.warning(f"""
-Signal Price:
-${signal_price:.2f}
+    Signal Price:
+    ${signal_price:.2f}
 
-AI Confidence:
-{confidence}%
-""")
+    Strategy:
+    {strategy_type}
+
+    AI Confidence:
+    {confidence}%
+    """)
+
+        # =========================================
+        # TELEGRAM MESSAGE
+        # =========================================
+
+        telegram_message = f"""
+    🔴 SELL SIGNAL DETECTED
+
+    Ticker: {ticker}
+
+    Price: ${signal_price:.2f}
+
+    Strategy: {strategy_type}
+
+    AI Confidence: {confidence}%
+
+    Generated By:
+    AI Quant Trading Platform
+    """
+
+        send_telegram_alert(
+            telegram_message
+        )
+
+        # =========================================
+        # ALERT HISTORY
+        # =========================================
 
         st.session_state.alert_history.append({
 
@@ -1936,6 +2140,8 @@ AI Confidence:
 
             "Signal": "SELL",
 
+            "Strategy": strategy_type,
+
             "Price": round(
                 signal_price,
                 2
@@ -1943,7 +2149,6 @@ AI Confidence:
 
             "Confidence": confidence
         })
-
     # NO SIGNAL
 
     else:
