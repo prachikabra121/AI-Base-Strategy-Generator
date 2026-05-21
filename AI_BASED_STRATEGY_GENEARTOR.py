@@ -42,7 +42,15 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from ta.momentum import RSIIndicator
-from ta.trend import SMAIndicator
+from ta.trend import (
+    SMAIndicator,
+    EMAIndicator,
+    MACD
+)
+
+from ta.volatility import (
+    BollingerBands
+)
 import google.generativeai as genai
 import numpy as np
 import json
@@ -195,18 +203,49 @@ strategy_mode = st.radio(
 
 if strategy_mode == "Manual Strategy":
 
+    st.subheader(
+        "✍ Manual Trading Strategy"
+    )
+
+    st.info("""
+Supported Strategies:
+
+✅ RSI
+✅ SMA
+✅ EMA
+✅ MACD
+✅ Bollinger Bands
+✅ Momentum
+✅ Breakout
+""")
+
     strategy_text = st.text_area(
         "Describe Your Trading Strategy",
-        height=180,
+        height=260,
         placeholder="""
 Examples:
 
+RSI:
 Buy when RSI is below 45
 and sell when RSI is above 55
 
+SMA:
 Buy when 20 SMA crosses above 50 SMA
 
-Create aggressive crypto strategy
+EMA:
+Buy when 9 EMA crosses above 21 EMA
+
+MACD:
+Buy when MACD crosses above signal line
+
+Bollinger:
+Buy when price touches lower Bollinger Band
+
+Momentum:
+Create momentum strategy for crypto
+
+Breakout:
+Create breakout strategy for volatile market
 """
     )
 
@@ -216,19 +255,40 @@ Create aggressive crypto strategy
 
 else:
 
+    st.subheader(
+        "🤖 AI Generated Strategy"
+    )
+
+    st.info("""
+The AI can automatically generate:
+
+✅ Trend Following Strategies
+✅ Momentum Strategies
+✅ Swing Trading Strategies
+✅ Crypto Strategies
+✅ Breakout Strategies
+✅ Volatility Strategies
+""")
+
     ai_strategy_prompt = st.text_area(
         "Describe What Kind of Strategy You Want",
-        height=180,
+        height=240,
         placeholder="""
 Examples:
 
-Create bullish strategy for crypto
+Create bullish crypto strategy
 
 Create aggressive momentum strategy
 
 Create low-risk swing trading strategy
 
-Create breakout strategy
+Create breakout strategy for volatile stocks
+
+Create high-frequency EMA strategy
+
+Create MACD strategy for trending market
+
+Create Bollinger Band mean reversion strategy
 """
     )
 
@@ -239,12 +299,23 @@ Create breakout strategy
 def generate_ai_strategy(user_prompt):
 
     prompt = f"""
-You are an expert quantitative trader.
+You are an expert quantitative trader,
+portfolio manager,
+and institutional market strategist.
 
 Create a professional trading strategy.
 
 User Request:
 {user_prompt}
+
+Supported Strategies:
+- RSI
+- SMA
+- EMA
+- MACD
+- Bollinger Bands
+- Momentum
+- Breakout
 
 Return ONLY valid JSON.
 
@@ -260,9 +331,13 @@ Format:
     "risk_level":""
 }}
 
-Supported:
-- RSI
-- SMA
+RULES:
+1. Use realistic trading logic
+2. Keep strategy professional
+3. Generate only ONE strategy
+4. strategy_type must be:
+   RSI / SMA / EMA / MACD /
+   BOLLINGER / MOMENTUM / BREAKOUT
 """
 
     try:
@@ -281,26 +356,33 @@ Supported:
             ""
         )
 
-        return json.loads(content)
+        strategy_json = json.loads(content)
 
-    except:
+        return strategy_json
+
+    except Exception as e:
+
+        st.warning(
+            f"AI generation fallback used: {e}"
+        )
 
         return {
 
-            "strategy_name":"Fallback Strategy",
+            "strategy_name":"AI Momentum Strategy",
 
-            "strategy_type":"RSI",
+            "strategy_type":"MOMENTUM",
 
-            "entry":"Buy when RSI is below 45",
+            "entry":"Buy when momentum becomes strongly positive",
 
-            "exit":"Sell when RSI is above 55",
+            "exit":"Sell when momentum weakens",
 
             "stop_loss":"5%",
 
-            "take_profit":"10%",
+            "take_profit":"15%",
 
             "risk_level":"Medium"
         }
+
 
 # =========================================================
 # STRATEGY PARSER
@@ -308,13 +390,17 @@ Supported:
 
 def parse_strategy(strategy):
 
+    strategy_original = strategy
+
     strategy = strategy.lower()
 
-    # RSI
+    numbers = re.findall(r'\d+', strategy)
+
+    # =====================================================
+    # RSI STRATEGY
+    # =====================================================
 
     if "rsi" in strategy:
-
-        numbers = re.findall(r'\d+', strategy)
 
         if len(numbers) >= 2:
 
@@ -334,19 +420,163 @@ def parse_strategy(strategy):
 
             "buy_value": buy_value,
 
-            "sell_value": sell_value
+            "sell_value": sell_value,
+
+            "description":
+            f"RSI Mean Reversion Strategy ({buy_value}/{sell_value})"
         }
 
-    # SMA
+    # =====================================================
+    # SMA STRATEGY
+    # =====================================================
 
     elif "sma" in strategy:
 
+        if len(numbers) >= 2:
+
+            fast_sma = int(numbers[0])
+
+            slow_sma = int(numbers[1])
+
+        else:
+
+            fast_sma = 20
+
+            slow_sma = 50
+
         return {
 
-            "strategy_type":"SMA"
+            "strategy_type":"SMA",
+
+            "fast_sma": fast_sma,
+
+            "slow_sma": slow_sma,
+
+            "description":
+            f"SMA Crossover ({fast_sma}/{slow_sma})"
         }
 
+    # =====================================================
+    # EMA STRATEGY
+    # =====================================================
+
+    elif "ema" in strategy:
+
+        if len(numbers) >= 2:
+
+            fast_ema = int(numbers[0])
+
+            slow_ema = int(numbers[1])
+
+        else:
+
+            fast_ema = 9
+
+            slow_ema = 21
+
+        return {
+
+            "strategy_type":"EMA",
+
+            "fast_ema": fast_ema,
+
+            "slow_ema": slow_ema,
+
+            "description":
+            f"EMA Crossover ({fast_ema}/{slow_ema})"
+        }
+
+    # =====================================================
+    # MACD STRATEGY
+    # =====================================================
+
+    elif "macd" in strategy:
+
+        return {
+
+            "strategy_type":"MACD",
+
+            "description":
+            "MACD Momentum Strategy"
+        }
+
+    # =====================================================
+    # BOLLINGER STRATEGY
+    # =====================================================
+
+    elif "bollinger" in strategy:
+
+        return {
+
+            "strategy_type":"BOLLINGER",
+
+            "description":
+            "Bollinger Band Mean Reversion"
+        }
+
+    # =====================================================
+    # MOMENTUM STRATEGY
+    # =====================================================
+
+    elif "momentum" in strategy:
+
+        return {
+
+            "strategy_type":"MOMENTUM",
+
+            "description":
+            "Momentum Trading Strategy"
+        }
+
+    # =====================================================
+    # BREAKOUT STRATEGY
+    # =====================================================
+
+    elif "breakout" in strategy:
+
+        return {
+
+            "strategy_type":"BREAKOUT",
+
+            "description":
+            "Breakout Volatility Strategy"
+        }
+
+    # =====================================================
+    # TREND FOLLOWING
+    # =====================================================
+
+    elif "trend" in strategy:
+
+        return {
+
+            "strategy_type":"SMA",
+
+            "fast_sma": 20,
+
+            "slow_sma": 50,
+
+            "description":
+            "Trend Following SMA Strategy"
+        }
+
+    # =====================================================
+    # CRYPTO STRATEGY
+    # =====================================================
+
+    elif "crypto" in strategy:
+
+        return {
+
+            "strategy_type":"MOMENTUM",
+
+            "description":
+            "Aggressive Crypto Momentum Strategy"
+        }
+
+    # =====================================================
     # DEFAULT
+    # =====================================================
 
     return {
 
@@ -354,7 +584,10 @@ def parse_strategy(strategy):
 
         "buy_value":45,
 
-        "sell_value":55
+        "sell_value":55,
+
+        "description":
+        "Default RSI Mean Reversion Strategy"
     }
 
 # =========================================================
@@ -364,15 +597,31 @@ def parse_strategy(strategy):
 def explain_strategy(strategy):
 
     prompt = f"""
-Explain this trading strategy:
+You are an institutional quantitative trader.
 
+Explain this trading strategy professionally.
+
+Strategy:
 {strategy}
 
+Explain in SIMPLE language.
+
 Include:
-- logic
-- risks
-- best market conditions
-- best usage
+
+1. Strategy Logic
+2. Entry Logic
+3. Exit Logic
+4. Risk Analysis
+5. Best Market Conditions
+6. Worst Market Conditions
+7. Volatility Impact
+8. Best Asset Types
+9. Advantages
+10. Disadvantages
+11. Professional Usage
+12. Risk Management Tips
+
+Keep explanation detailed but beginner friendly.
 """
 
     try:
@@ -381,103 +630,237 @@ Include:
 
         return response.text
 
-    except:
+    except Exception as e:
 
-        return "AI explanation unavailable."
+        return f"""
+AI explanation unavailable.
+
+Error:
+{e}
+"""
 
 # =========================================================
 # LOAD DATA
 # =========================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1800)
 
 def load_data(symbol, period):
 
-    st.write(f"Fetching data for: {symbol}")
+    st.write(f"📡 Fetching market data for: {symbol}")
 
-    try:
+    max_retries = 3
 
-        time.sleep(1)
+    for attempt in range(max_retries):
 
-        df = yf.download(
-            tickers=symbol,
-            period=period,
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-            threads=False,
-            group_by='column'
-        )
+        try:
 
-        st.write(
-            "Downloaded Rows:",
-            len(df)
-        )
+            # =============================================
+            # SMALL DELAY
+            # =============================================
 
-        if df.empty:
+            time.sleep(1)
 
-            st.error(
-                f"❌ No market data found for {symbol}"
+            # =============================================
+            # DOWNLOAD DATA
+            # =============================================
+
+            df = yf.download(
+
+                tickers=symbol,
+
+                period=period,
+
+                interval="1d",
+
+                auto_adjust=True,
+
+                progress=False,
+
+                threads=False,
+
+                group_by='column'
             )
 
-            st.stop()
+            # =============================================
+            # DEBUGGING
+            # =============================================
 
-        if isinstance(
-            df.columns,
-            pd.MultiIndex
-        ):
-
-            df.columns = df.columns.droplevel(1)
-
-        df = df.dropna()
-
-        required_cols = [
-            'Open',
-            'High',
-            'Low',
-            'Close',
-            'Volume'
-        ]
-
-        missing_cols = [
-
-            col for col in required_cols
-
-            if col not in df.columns
-        ]
-
-        if len(missing_cols) > 0:
-
-            st.error(
-                f"Missing columns: {missing_cols}"
+            st.write(
+                f"✅ Download Attempt {attempt + 1}"
             )
 
-            st.stop()
+            st.write(
+                "Downloaded Rows:",
+                len(df)
+            )
 
-        return df
+            # =============================================
+            # EMPTY CHECK
+            # =============================================
 
-    except Exception as e:
+            if df.empty:
 
-        st.error(
-            f"Data Loading Error: {e}"
-        )
+                raise ValueError(
+                    f"No market data found for {symbol}"
+                )
 
-        st.info("""
-Yahoo Finance temporarily rate-limited requests.
+            # =============================================
+            # FIX MULTI INDEX
+            # =============================================
 
-Try:
-1. Wait 1 minute
-2. Restart app
-3. Change ticker
+            if isinstance(
+                df.columns,
+                pd.MultiIndex
+            ):
+
+                df.columns = df.columns.droplevel(-1)
+
+            # =============================================
+            # RESET COLUMN NAMES
+            # =============================================
+
+            df.columns = [
+                str(col).strip()
+                for col in df.columns
+            ]
+
+            # =============================================
+            # REMOVE DUPLICATES
+            # =============================================
+
+            df = df.loc[
+                ~df.index.duplicated()
+            ]
+
+            # =============================================
+            # DROP NULLS
+            # =============================================
+
+            df = df.dropna()
+
+            # =============================================
+            # REQUIRED COLUMNS
+            # =============================================
+
+            required_cols = [
+
+                'Open',
+                'High',
+                'Low',
+                'Close',
+                'Volume'
+            ]
+
+            missing_cols = [
+
+                col for col in required_cols
+
+                if col not in df.columns
+            ]
+
+            # =============================================
+            # COLUMN VALIDATION
+            # =============================================
+
+            if len(missing_cols) > 0:
+
+                st.error(
+                    f"❌ Missing Columns: {missing_cols}"
+                )
+
+                st.write(
+                    "Available Columns:",
+                    df.columns.tolist()
+                )
+
+                raise ValueError(
+                    "Invalid market structure"
+                )
+
+            # =============================================
+            # FINAL CLEANING
+            # =============================================
+
+            df = df.sort_index()
+
+            df = df.astype(float)
+
+            # =============================================
+            # SUCCESS
+            # =============================================
+
+            st.success(
+                f"✅ Successfully loaded {len(df)} rows"
+            )
+
+            return df
+
+        # =============================================
+        # RETRY LOGIC
+        # =============================================
+
+        except Exception as e:
+
+            st.warning(
+                f"⚠ Attempt {attempt + 1} failed: {e}"
+            )
+
+            time.sleep(2)
+
+    # =============================================
+    # FINAL FAILURE
+    # =============================================
+
+    st.error("""
+❌ Failed to load market data.
+
+Possible Reasons:
+
+1. Yahoo Finance rate limit
+2. Invalid ticker
+3. Internet issue
+4. Temporary API issue
+5. Unsupported symbol
 """)
 
-        st.stop()
+    st.info("""
+✅ Examples of Valid Tickers:
 
+US Stocks:
+AAPL
+TSLA
+NVDA
+
+Indian Stocks:
+RELIANCE.NS
+TCS.NS
+
+Crypto:
+BTC-USD
+ETH-USD
+
+Indexes:
+^NSEI
+^GSPC
+""")
+
+    st.stop()
 # =========================================================
-# RECOMMENDATION ENGINE
+# ADVANCED AI RECOMMENDATION ENGINE
 # =========================================================
 
 def recommend_strategy(df):
+
+    # =============================================
+    # MOVING AVERAGES
+    # =============================================
+
+    sma20 = (
+        df['Close']
+        .rolling(20)
+        .mean()
+    )
 
     sma50 = (
         df['Close']
@@ -491,6 +874,20 @@ def recommend_strategy(df):
         .mean()
     )
 
+    # =============================================
+    # RSI
+    # =============================================
+
+    rsi = RSIIndicator(
+        close=df['Close']
+    ).rsi()
+
+    latest_rsi = rsi.iloc[-1]
+
+    # =============================================
+    # VOLATILITY
+    # =============================================
+
     volatility = (
         df['Close']
         .pct_change()
@@ -498,26 +895,169 @@ def recommend_strategy(df):
         * np.sqrt(252)
     )
 
-    if sma50.iloc[-1] > sma200.iloc[-1]:
+    # =============================================
+    # MOMENTUM
+    # =============================================
 
-        recommendation = "SMA"
+    momentum = (
+        df['Close'].pct_change(10)
+    )
 
-        explanation = """
-📈 Trending Market Detected
+    latest_momentum = momentum.iloc[-1]
 
-✅ Recommended:
-SMA Trend Following
+    # =============================================
+    # LATEST PRICE
+    # =============================================
+
+    latest_close = df['Close'].iloc[-1]
+
+    # =============================================
+    # STRONG BULLISH TREND
+    # =============================================
+
+    if (
+        latest_close > sma20.iloc[-1]
+        and sma20.iloc[-1] > sma50.iloc[-1]
+        and sma50.iloc[-1] > sma200.iloc[-1]
+    ):
+
+        recommendation = "SMA Trend Following"
+
+        explanation = f"""
+📈 Strong Bullish Trend Detected
+
+✅ Recommended Strategy:
+Trend Following
+
+📌 Best Strategies:
+- SMA Crossover
+- EMA Crossover
+- MACD Trend Strategy
+
+📊 Market Analysis:
+Price is above SMA20, SMA50 and SMA200.
+Strong bullish momentum detected.
 """
+
+    # =============================================
+    # STRONG BEARISH TREND
+    # =============================================
+
+    elif (
+        latest_close < sma20.iloc[-1]
+        and sma20.iloc[-1] < sma50.iloc[-1]
+    ):
+
+        recommendation = "Defensive Bearish Strategy"
+
+        explanation = f"""
+📉 Bearish Market Detected
+
+✅ Recommended Strategy:
+Defensive / Short Bias
+
+📌 Best Strategies:
+- RSI Reversal
+- Bollinger Mean Reversion
+
+📊 Market Analysis:
+Price is below major moving averages.
+Momentum remains weak.
+"""
+
+    # =============================================
+    # HIGH VOLATILITY
+    # =============================================
+
+    elif volatility > 0.50:
+
+        recommendation = "Momentum Breakout"
+
+        explanation = f"""
+🚀 High Volatility Market Detected
+
+✅ Recommended Strategy:
+Momentum / Breakout
+
+📌 Best Strategies:
+- Momentum Strategy
+- Breakout Strategy
+- EMA Scalping
+
+📊 Market Analysis:
+Volatility is extremely high.
+Large price movements expected.
+"""
+
+    # =============================================
+    # SIDEWAYS MARKET
+    # =============================================
+
+    elif 40 <= latest_rsi <= 60:
+
+        recommendation = "RSI Mean Reversion"
+
+        explanation = f"""
+📊 Sideways Market Detected
+
+✅ Recommended Strategy:
+Mean Reversion
+
+📌 Best Strategies:
+- RSI Strategy
+- Bollinger Bands
+
+📊 Market Analysis:
+RSI indicates market consolidation.
+Ideal for swing trading.
+"""
+
+    # =============================================
+    # STRONG MOMENTUM
+    # =============================================
+
+    elif latest_momentum > 0.08:
+
+        recommendation = "Momentum Strategy"
+
+        explanation = f"""
+🔥 Strong Momentum Detected
+
+✅ Recommended Strategy:
+Momentum Trading
+
+📌 Best Strategies:
+- MACD
+- EMA Momentum
+- Breakout Strategy
+
+📊 Market Analysis:
+Recent momentum is very strong.
+Trend continuation likely.
+"""
+
+    # =============================================
+    # DEFAULT HYBRID
+    # =============================================
 
     else:
 
-        recommendation = "RSI"
+        recommendation = "Balanced Hybrid Strategy"
 
-        explanation = """
-📉 Sideways Market Detected
+        explanation = f"""
+⚖ Mixed Market Conditions
 
-✅ Recommended:
-RSI Mean Reversion
+✅ Recommended Strategy:
+Balanced Hybrid Strategy
+
+📌 Best Strategies:
+- RSI + SMA Combination
+- MACD Confirmation
+- Bollinger Confirmation
+
+📊 Market Analysis:
+Market conditions are mixed.
+Use balanced risk management.
 """
 
     return (
@@ -619,7 +1159,200 @@ def run_sma_strategy(df):
     ] = -1
 
     return df
+# =========================================================
+# EMA STRATEGY
+# =========================================================
 
+def run_ema_strategy(df):
+
+    ema9 = EMAIndicator(
+        close=df['Close'],
+        window=9
+    )
+
+    ema21 = EMAIndicator(
+        close=df['Close'],
+        window=21
+    )
+
+    df['EMA9'] = ema9.ema_indicator()
+
+    df['EMA21'] = ema21.ema_indicator()
+
+    df['Signal'] = 0
+
+    # BUY
+
+    df.loc[
+        (
+            (df['EMA9'] > df['EMA21']) &
+            (
+                df['EMA9'].shift(1)
+                <= df['EMA21'].shift(1)
+            )
+        ),
+        'Signal'
+    ] = 1
+
+    # SELL
+
+    df.loc[
+        (
+            (df['EMA9'] < df['EMA21']) &
+            (
+                df['EMA9'].shift(1)
+                >= df['EMA21'].shift(1)
+            )
+        ),
+        'Signal'
+    ] = -1
+
+    return df
+
+# =========================================================
+# MACD STRATEGY
+# =========================================================
+
+def run_macd_strategy(df):
+
+    macd = MACD(
+        close=df['Close']
+    )
+
+    df['MACD'] = macd.macd()
+
+    df['MACD_SIGNAL'] = macd.macd_signal()
+
+    df['Signal'] = 0
+
+    # BUY
+
+    df.loc[
+        (
+            (df['MACD'] > df['MACD_SIGNAL']) &
+            (
+                df['MACD'].shift(1)
+                <= df['MACD_SIGNAL'].shift(1)
+            )
+        ),
+        'Signal'
+    ] = 1
+
+    # SELL
+
+    df.loc[
+        (
+            (df['MACD'] < df['MACD_SIGNAL']) &
+            (
+                df['MACD'].shift(1)
+                >= df['MACD_SIGNAL'].shift(1)
+            )
+        ),
+        'Signal'
+    ] = -1
+
+    return df
+
+# =========================================================
+# BOLLINGER STRATEGY
+# =========================================================
+
+def run_bollinger_strategy(df):
+
+    bb = BollingerBands(
+        close=df['Close'],
+        window=20,
+        window_dev=2
+    )
+
+    df['BB_HIGH'] = bb.bollinger_hband()
+
+    df['BB_LOW'] = bb.bollinger_lband()
+
+    df['Signal'] = 0
+
+    # BUY
+
+    df.loc[
+        df['Close'] < df['BB_LOW'],
+        'Signal'
+    ] = 1
+
+    # SELL
+
+    df.loc[
+        df['Close'] > df['BB_HIGH'],
+        'Signal'
+    ] = -1
+
+    return df
+
+# =========================================================
+# MOMENTUM STRATEGY
+# =========================================================
+
+def run_momentum_strategy(df):
+
+    roc = ROCIndicator(
+        close=df['Close'],
+        window=10
+    )
+
+    df['ROC'] = roc.roc()
+
+    df['Signal'] = 0
+
+    # BUY
+
+    df.loc[
+        df['ROC'] > 5,
+        'Signal'
+    ] = 1
+
+    # SELL
+
+    df.loc[
+        df['ROC'] < -5,
+        'Signal'
+    ] = -1
+
+    return df
+
+# =========================================================
+# BREAKOUT STRATEGY
+# =========================================================
+
+def run_breakout_strategy(df):
+
+    df['High_20'] = (
+        df['High']
+        .rolling(20)
+        .max()
+    )
+
+    df['Low_20'] = (
+        df['Low']
+        .rolling(20)
+        .min()
+    )
+
+    df['Signal'] = 0
+
+    # BUY
+
+    df.loc[
+        df['Close'] > df['High_20'].shift(1),
+        'Signal'
+    ] = 1
+
+    # SELL
+
+    df.loc[
+        df['Close'] < df['Low_20'].shift(1),
+        'Signal'
+    ] = -1
+
+    return df
 # =========================================================
 # BACKTEST ENGINE
 # =========================================================
@@ -945,6 +1678,8 @@ if st.button("🚀 Generate AI Strategy"):
         'strategy_type'
     ]
 
+    # RSI
+
     if strategy_type.upper() == "RSI":
 
         data = run_rsi_strategy(
@@ -959,9 +1694,51 @@ if st.button("🚀 Generate AI Strategy"):
             )
         )
 
-    else:
+    # SMA
+
+    elif strategy_type.upper() == "SMA":
 
         data = run_sma_strategy(data)
+
+    # EMA
+
+    elif strategy_type.upper() == "EMA":
+
+        data = run_ema_strategy(data)
+
+    # MACD
+
+    elif strategy_type.upper() == "MACD":
+
+        data = run_macd_strategy(data)
+
+    # BOLLINGER
+
+    elif strategy_type.upper() == "BOLLINGER":
+
+        data = run_bollinger_strategy(data)
+
+    # MOMENTUM
+
+    elif strategy_type.upper() == "MOMENTUM":
+
+        data = run_momentum_strategy(data)
+
+    # BREAKOUT
+
+    elif strategy_type.upper() == "BREAKOUT":
+
+        data = run_breakout_strategy(data)
+
+    # DEFAULT
+
+    else:
+
+        data = run_rsi_strategy(
+            data,
+            45,
+            55
+        )
 
     # =====================================================
     # BACKTEST
